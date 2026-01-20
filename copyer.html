@@ -3,221 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Копирование текста с кнопок</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Команды</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
         body {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
         }
         
         .container {
-            max-width: 1200px;
-            width: 100%;
+            max-width: 800px;
             margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            padding: 30px;
         }
         
         header {
             text-align: center;
-            color: white;
-            padding: 30px 20px;
-            width: 100%;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
         }
         
         h1 {
-            font-size: 2.5rem;
-            margin-bottom: 15px;
-            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-        }
-        
-        .description {
-            font-size: 1.2rem;
-            max-width: 800px;
-            margin: 0 auto 30px;
-            line-height: 1.6;
-            opacity: 0.9;
-        }
-        
-        .instructions {
-            background-color: rgba(255, 255, 255, 0.15);
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px auto 30px;
-            max-width: 800px;
-            border-left: 5px solid #ffcc00;
-        }
-        
-        .instructions h3 {
-            color: #ffcc00;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .instructions p {
-            color: white;
-            margin-bottom: 10px;
-        }
-        
-        .buttons-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            padding: 20px;
-            width: 100%;
-        }
-        
-        .button-wrapper {
-            position: relative;
-        }
-        
-        .copy-btn {
-            background: linear-gradient(to right, #ffffff, #f5f7fa);
-            border: none;
-            border-radius: 12px;
-            padding: 18px 24px;
-            font-size: 1.1rem;
-            font-weight: 500;
             color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .comand-btn {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 18px 20px;
+            border-radius: 12px;
+            font-size: 1.1rem;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-            width: 100%;
             text-align: left;
             position: relative;
             overflow: hidden;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         
-        .copy-btn:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
-            background: linear-gradient(to right, #f5f7fa, #eef1f5);
-        }
-        
-        .copy-btn:active {
+        .comand-btn:hover {
+            background: #4338ca;
             transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
         }
         
-        .copy-btn.has-ampersand::before {
-            content: "&";
+        .comand-btn:active {
+            transform: translateY(0);
+        }
+        
+        .comand-btn::after {
+            content: 'Копировать';
             position: absolute;
-            top: 5px;
-            right: 5px;
-            background-color: #ff6b6b;
-            color: white;
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
             font-size: 0.8rem;
-            font-weight: bold;
-        }
-        
-        .copy-btn .icon {
-            font-size: 1.2rem;
-            color: #6a11cb;
-            transition: transform 0.3s ease;
-        }
-        
-        .copy-btn:hover .icon {
-            transform: scale(1.2);
-        }
-        
-        .copy-btn.copied {
-            background: linear-gradient(to right, #4CAF50, #8BC34A);
-            color: white;
-        }
-        
-        .copy-btn.copied .icon {
-            color: white;
-        }
-        
-        .toast {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background-color: #4CAF50;
-            color: white;
-            padding: 15px 30px;
-            border-radius: 50px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            opacity: 0;
-            transition: all 0.4s ease;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 500;
-        }
-        
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-        
-        footer {
-            margin-top: 40px;
-            text-align: center;
-            color: white;
-            padding: 20px;
             opacity: 0.8;
-            font-size: 0.9rem;
         }
         
-        @media (max-width: 768px) {
+        .copy-notice {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .copy-notice.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 1.2rem;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #ef4444;
+            background: #fef2f2;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .refresh-btn {
+            display: block;
+            margin: 0 auto;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+                border-radius: 15px;
+            }
+            
             h1 {
                 font-size: 2rem;
             }
             
-            .description {
-                font-size: 1rem;
-            }
-            
-            .buttons-container {
+            .buttons-grid {
                 grid-template-columns: 1fr;
-                padding: 10px;
             }
             
-            .copy-btn {
-                padding: 16px 20px;
-                font-size: 1rem;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            body {
-                padding: 10px;
-            }
-            
-            h1 {
-                font-size: 1.8rem;
-            }
-            
-            .instructions {
+            .comand-btn {
                 padding: 15px;
-            }
-            
-            .copy-btn {
-                padding: 14px 16px;
             }
         }
     </style>
@@ -225,374 +158,98 @@
 <body>
     <div class="container">
         <header>
-            
+            <h1>📋 Команды</h1>
+            <p class="subtitle">Нажмите на команду, чтобы скопировать</p>
+        </header>
         
-        <main><div class="buttons-container">
-                
-                <div class="button-wrapper">
-                    <button class="copy-btn">
-                        <span>куку</span>
-                        <i class="fas fa-copy icon"></i>
-                    </button>
-                </div>
-                </div></main>
-        
-        <!-- Toast-уведомление -->
-        <div class="toast" id="toast">
-            <i class="fas fa-check-circle"></i>
-            <span>Текст скопирован в буфер обмена!</span>
+        <div id="buttons-container">
+            <div class="loading">Загрузка команд...</div>
         </div>
         
-        <footer>
-            <p>© 2023 Копирование текста с кнопок | Все кнопки адаптированы для мобильных устройств</p>
-        </footer>
+        <div class="copy-notice" id="copyNotice">
+            Скопировано в буфер обмена!
+        </div>
+        
+        <button class="refresh-btn" onclick="loadComands()" style="display: none;" id="refreshBtn">
+            Обновить
+        </button>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('.copy-btn');
-            const toast = document.getElementById('toast');
+        const serverUrl = 'https://https://nik2006.pythonanywhere.com'; // Замените на ваш URL
+        
+        async function loadComands() {
+            const container = document.getElementById('buttons-container');
+            const refreshBtn = document.getElementById('refreshBtn');
             
-            // Добавляем обработчик для каждой кнопки
-            buttons.forEach(button => {
-                button.addEventListener('click', async function() {
-                    let originalText = this.querySelector('span').textContent;
-                    let finalText = originalText;
-                    
-                    // Проверяем, есть ли в тексте символ &
-                    const ampersandCount = (originalText.match(/&/g) || []).length;
-                    
-                    // Если есть символы &, запрашиваем замену для каждого
-                    if (ampersandCount > 0) {
-                        let tempText = originalText;
-                        
-                        for (let i = 0; i < 1; i++) {
-                            const userInput = prompt(
-                                `В тексте найден символ "&". Введите текст для замены ${i+1}-го символа "&":\n\nТекущий текст: ${tempText}`,
-                                ""
-                            );
-                            
-                            // Если пользователь отменил ввод, прерываем операцию
-                            if (userInput === null) {
-                                showToast("Операция отменена", "warning");
-                                return;
-                            }
-                            
-                            // Заменяем первый найденный символ &
-                            tempText = tempText.replace('&', userInput);
-                        }
-                        
-                        finalText = tempText;
-                    }
-                    
-                    // Копируем текст в буфер обмена
-                    try {
-                        await navigator.clipboard.writeText(finalText);
-                        
-                        // Показываем визуальную обратную связь
-                        this.classList.add('copied');
-                        
-                        // Показываем toast-уведомление
-                        showToast("Текст скопирован в буфер обмена!", "success");
-                        
-                        // Возвращаем исходный вид кнопки через 2 секунды
-                        setTimeout(() => {
-                            this.classList.remove('copied');
-                        }, 2000);
-                        
-                    } catch (err) {
-                        console.error('Ошибка при копировании: ', err);
-                        showToast("Не удалось скопировать текст", "error");
-                    }
-                });
-            });
+            container.innerHTML = '<div class="loading">Загрузка команд...</div>';
+            refreshBtn.style.display = 'none';
             
-            // Функция для показа toast-уведомлений
-            function showToast(message, type = "success") {
-                const toastIcon = toast.querySelector('i');
-                const toastText = toast.querySelector('span');
+            try {
+                const response = await fetch(`${serverUrl}/comand`);
+                const data = await response.json();
                 
-                // Меняем стиль в зависимости от типа уведомления
-                if (type === "success") {
-                    toast.style.backgroundColor = "#4CAF50";
-                    toastIcon.className = "fas fa-check-circle";
-                } else if (type === "warning") {
-                    toast.style.backgroundColor = "#ff9800";
-                    toastIcon.className = "fas fa-exclamation-triangle";
+                if (data.comands && data.comands.length > 0) {
+                    renderButtons(data.comands);
                 } else {
-                    toast.style.backgroundColor = "#f44336";
-                    toastIcon.className = "fas fa-exclamation-circle";
+                    container.innerHTML = '<div class="error">Нет доступных команд</div>';
                 }
-                
-                toastText.textContent = message;
-                
-                // Показываем toast
-                toast.classList.add('show');
-                
-                // Скрываем toast через 3 секунды
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                }, 1000);
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="error">
+                        Ошибка загрузки команд
+                        <br>
+                        <small>${error.message}</small>
+                    </div>
+                `;
+                refreshBtn.style.display = 'block';
             }
+        }
+        
+        function renderButtons(comands) {
+            const container = document.getElementById('buttons-container');
+            container.innerHTML = '';
             
-            // Автоматически помечаем кнопки, содержащие символ &
-            buttons.forEach(button => {
-                const text = button.querySelector('span').textContent;
-                if (text.includes('&')) {
-                    button.classList.add('has-ampersand');
-                }
+            const grid = document.createElement('div');
+            grid.className = 'buttons-grid';
+            
+            comands.forEach((comand, index) => {
+                const button = document.createElement('button');
+                button.className = 'comand-btn';
+                button.textContent = comand;
+                button.onclick = () => copyToClipboard(comand);
+                grid.appendChild(button);
             });
-        });
+            
+            container.appendChild(grid);
+        }
+        
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showCopyNotice();
+            } catch (err) {
+                // Fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showCopyNotice();
+            }
+        }
+        
+        function showCopyNotice() {
+            const notice = document.getElementById('copyNotice');
+            notice.classList.add('show');
+            setTimeout(() => {
+                notice.classList.remove('show');
+            }, 2000);
+        }
+        
+        // Загружаем команды при загрузке страницы
+        document.addEventListener('DOMContentLoaded', loadComands);
     </script>
-
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('.copy-btn');
-            const toast = document.getElementById('toast');
-            
-            buttons.forEach(button => {
-                button.addEventListener('click', async function() {
-                    let originalText = this.querySelector('span').textContent;
-                    let finalText = originalText;
-                    
-                    const ampersandCount = (originalText.match(/&/g) || []).length;
-                    
-                    if (ampersandCount > 0) {
-                        let tempText = originalText;
-                        
-                        for (let i = 0; i < ampersandCount; i++) {
-                            const userInput = prompt(
-                                `В тексте найден символ "&". Введите текст для замены ${i+1}-го символа "&":\n\nТекущий текст: ${tempText}`,
-                                ""
-                            );
-                            
-                            if (userInput === null) {
-                                return;
-                            }
-                            
-                            tempText = tempText.replace('&', userInput);
-                        }
-                        
-                        finalText = tempText;
-                    }
-                    
-                    try {
-                        await navigator.clipboard.writeText(finalText);
-                        
-                        this.classList.add('copied');
-                        toast.classList.add('show');
-                        
-                        setTimeout(() => {
-                            this.classList.remove('copied');
-                            toast.classList.remove('show');
-                        }, 2000);
-                        
-                    } catch (err) {
-                        console.error('Ошибка при копировании: ', err);
-                    }
-                });
-            });
-        });
-        </script>
-                
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('.copy-btn');
-            const toast = document.getElementById('toast');
-            
-            buttons.forEach(button => {
-                button.addEventListener('click', async function() {
-                    let originalText = this.querySelector('span').textContent;
-                    let finalText = originalText;
-                    
-                    const ampersandCount = (originalText.match(/&/g) || []).length;
-                    
-                    if (ampersandCount > 0) {
-                        let tempText = originalText;
-                        
-                        for (let i = 0; i < ampersandCount; i++) {
-                            const userInput = prompt(
-                                `В тексте найден символ "&". Введите текст для замены ${i+1}-го символа "&":\n\nТекущий текст: ${tempText}`,
-                                ""
-                            );
-                            
-                            if (userInput === null) {
-                                return;
-                            }
-                            
-                            tempText = tempText.replace('&', userInput);
-                        }
-                        
-                        finalText = tempText;
-                    }
-                    
-                    try {
-                        await navigator.clipboard.writeText(finalText);
-                        
-                        this.classList.add('copied');
-                        toast.classList.add('show');
-                        
-                        setTimeout(() => {
-                            this.classList.remove('copied');
-                            toast.classList.remove('show');
-                        }, 2000);
-                        
-                    } catch (err) {
-                        console.error('Ошибка при копировании: ', err);
-                    }
-                });
-            });
-        });
-        </script>
-                
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('.copy-btn');
-            const toast = document.getElementById('toast');
-            
-            buttons.forEach(button => {
-                button.addEventListener('click', async function() {
-                    let originalText = this.querySelector('span').textContent;
-                    let finalText = originalText;
-                    
-                    const ampersandCount = (originalText.match(/&/g) || []).length;
-                    
-                    if (ampersandCount > 0) {
-                        let tempText = originalText;
-                        
-                        for (let i = 0; i < ampersandCount; i++) {
-                            const userInput = prompt(
-                                `В тексте найден символ "&". Введите текст для замены ${i+1}-го символа "&":\n\nТекущий текст: ${tempText}`,
-                                ""
-                            );
-                            
-                            if (userInput === null) {
-                                return;
-                            }
-                            
-                            tempText = tempText.replace('&', userInput);
-                        }
-                        
-                        finalText = tempText;
-                    }
-                    
-                    try {
-                        await navigator.clipboard.writeText(finalText);
-                        
-                        this.classList.add('copied');
-                        toast.classList.add('show');
-                        
-                        setTimeout(() => {
-                            this.classList.remove('copied');
-                            toast.classList.remove('show');
-                        }, 2000);
-                        
-                    } catch (err) {
-                        console.error('Ошибка при копировании: ', err);
-                    }
-                });
-            });
-        });
-        </script>
-                
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('.copy-btn');
-            const toast = document.getElementById('toast');
-            
-            buttons.forEach(button => {
-                button.addEventListener('click', async function() {
-                    let originalText = this.querySelector('span').textContent;
-                    let finalText = originalText;
-                    
-                    const ampersandCount = (originalText.match(/&/g) || []).length;
-                    
-                    if (ampersandCount > 0) {
-                        let tempText = originalText;
-                        
-                        for (let i = 0; i < ampersandCount; i++) {
-                            const userInput = prompt(
-                                `В тексте найден символ "&". Введите текст для замены ${i+1}-го символа "&":\n\nТекущий текст: ${tempText}`,
-                                ""
-                            );
-                            
-                            if (userInput === null) {
-                                return;
-                            }
-                            
-                            tempText = tempText.replace('&', userInput);
-                        }
-                        
-                        finalText = tempText;
-                    }
-                    
-                    try {
-                        await navigator.clipboard.writeText(finalText);
-                        
-                        this.classList.add('copied');
-                        toast.classList.add('show');
-                        
-                        setTimeout(() => {
-                            this.classList.remove('copied');
-                            toast.classList.remove('show');
-                        }, 2000);
-                        
-                    } catch (err) {
-                        console.error('Ошибка при копировании: ', err);
-                    }
-                });
-            });
-        });
-        </script>
-                
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('.copy-btn');
-            const toast = document.getElementById('toast');
-            
-            buttons.forEach(button => {
-                button.addEventListener('click', async function() {
-                    let originalText = this.querySelector('span').textContent;
-                    let finalText = originalText;
-                    
-                    const ampersandCount = (originalText.match(/&/g) || []).length;
-                    
-                    if (ampersandCount > 0) {
-                        let tempText = originalText;
-                        
-                        for (let i = 0; i < ampersandCount; i++) {
-                            const userInput = prompt(
-                                `В тексте найден символ "&". Введите текст для замены ${i+1}-го символа "&":\n\nТекущий текст: ${tempText}`,
-                                ""
-                            );
-                            
-                            if (userInput === null) {
-                                return;
-                            }
-                            
-                            tempText = tempText.replace('&', userInput);
-                        }
-                        
-                        finalText = tempText;
-                    }
-                    
-                    try {
-                        await navigator.clipboard.writeText(finalText);
-                        
-                        this.classList.add('copied');
-                        toast.classList.add('show');
-                        
-                        setTimeout(() => {
-                            this.classList.remove('copied');
-                            toast.classList.remove('show');
-                        }, 2000);
-                        
-                    } catch (err) {
-                        console.error('Ошибка при копировании: ', err);
-                    }
-                });
-            });
-        });
-        </script>
-                </body>
+</body>
 </html>
