@@ -2,73 +2,118 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Карточки для изучения слов</title>
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
         }
 
         .app {
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             overflow: hidden;
+            min-height: calc(100vh - 20px);
         }
 
         header {
             background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
             color: white;
-            padding: 25px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .mobile-menu {
+            display: none;
+            background: #4f46e5;
+            padding: 15px;
             text-align: center;
         }
 
-        .container {
+        .mobile-menu select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+            background: white;
+        }
+
+        .main-container {
             display: flex;
-            min-height: 600px;
+            flex-direction: column;
+            min-height: calc(100vh - 150px);
+        }
+
+        @media (min-width: 768px) {
+            .main-container {
+                flex-direction: row;
+            }
         }
 
         .sidebar {
-            width: 300px;
+            width: 100%;
             background: #f8fafc;
-            border-right: 1px solid #e2e8f0;
             padding: 20px;
-            overflow-y: auto;
+            border-bottom: 1px solid #e2e8f0;
         }
 
-        .main-content {
+        @media (min-width: 768px) {
+            .sidebar {
+                width: 300px;
+                border-right: 1px solid #e2e8f0;
+                border-bottom: none;
+                height: auto;
+            }
+        }
+
+        .content-area {
             flex: 1;
-            padding: 25px;
+            padding: 20px;
             background: white;
+            display: flex;
+            flex-direction: column;
         }
 
         .tab-buttons {
             display: flex;
-            gap: 10px;
-            margin-bottom: 25px;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 10px;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
         .tab-btn {
-            padding: 10px 20px;
+            padding: 10px 15px;
             border: none;
             background: #f1f5f9;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
             transition: all 0.3s;
+            flex: 1;
+            min-width: 80px;
+            font-size: 14px;
+        }
+
+        @media (min-width: 768px) {
+            .tab-btn {
+                flex: none;
+                min-width: auto;
+            }
         }
 
         .tab-btn.active {
@@ -78,46 +123,57 @@
 
         .tab-content {
             display: none;
+            animation: fadeIn 0.3s;
         }
 
         .tab-content.active {
             display: block;
-            animation: fadeIn 0.5s;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
-        input, select {
+        input, select, textarea {
             width: 100%;
             padding: 12px;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
             font-size: 16px;
-            margin-top: 8px;
+            margin-top: 5px;
         }
 
         button {
             background: #4f46e5;
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 12px 20px;
             border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
             font-weight: 500;
             transition: all 0.3s;
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        @media (min-width: 768px) {
+            button {
+                width: auto;
+            }
         }
 
         button:hover {
             background: #4338ca;
-            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: scale(0.98);
         }
 
         .btn-danger {
@@ -136,9 +192,21 @@
             background: #059669;
         }
 
+        .btn-secondary {
+            background: #6b7280;
+        }
+
         .tree-view {
             list-style: none;
-            padding-left: 20px;
+            padding-left: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        @media (min-width: 768px) {
+            .tree-view {
+                max-height: 400px;
+            }
         }
 
         .tree-item {
@@ -156,7 +224,6 @@
 
         .tree-item:hover {
             background: #f1f5f9;
-            border-color: #cbd5e1;
         }
 
         .folder {
@@ -168,12 +235,59 @@
             color: #0f766e;
         }
 
+        /* Карточки на всю страницу */
+        .study-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .study-screen.active {
+            display: flex;
+        }
+
+        .study-header {
+            color: white;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .study-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
         .card {
             perspective: 1000px;
             width: 100%;
-            max-width: 500px;
-            height: 300px;
-            margin: 30px auto;
+            max-width: 400px;
+            height: 250px;
+            position: relative;
+            touch-action: pan-y;
+        }
+
+        @media (min-width: 768px) {
+            .card {
+                max-width: 500px;
+                height: 300px;
+            }
         }
 
         .card-inner {
@@ -181,9 +295,9 @@
             height: 100%;
             position: relative;
             transform-style: preserve-3d;
-            transition: transform 0.8s;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transition: transform 0.6s;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
         }
 
         .card.flipped .card-inner {
@@ -198,35 +312,86 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 600;
-            padding: 40px;
+            padding: 30px;
             text-align: center;
-            border-radius: 15px;
+            border-radius: 20px;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            user-select: none;
+        }
+
+        @media (min-width: 768px) {
+            .card-front, .card-back {
+                font-size: 28px;
+            }
         }
 
         .card-front {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
+            color: #1f2937;
         }
 
         .card-back {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
             color: white;
             transform: rotateY(180deg);
         }
 
-        .progress-info {
-            background: #f8fafc;
-            padding: 20px;
+        .card-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 12px;
+            color: #6b7280;
+            background: rgba(255,255,255,0.9);
+            padding: 2px 8px;
             border-radius: 10px;
+        }
+
+        .swipe-indicator {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 100;
+        }
+
+        .swipe-left {
+            left: 10px;
+            background: #ef4444;
+        }
+
+        .swipe-right {
+            right: 10px;
+            background: #10b981;
+        }
+
+        .swipe-indicator.show {
+            opacity: 1;
+        }
+
+        .progress-info {
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 15px;
             margin: 20px 0;
+            width: 100%;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+            flex-shrink: 0;
         }
 
         .progress-bar {
-            height: 10px;
+            height: 8px;
             background: #e2e8f0;
-            border-radius: 5px;
+            border-radius: 4px;
             overflow: hidden;
             margin: 10px 0;
         }
@@ -234,71 +399,118 @@
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, #10b981, #059669);
-            transition: width 0.5s;
+            transition: width 0.3s;
+            border-radius: 4px;
         }
 
-        .swipe-buttons {
+        .study-controls {
             display: flex;
             justify-content: center;
-            gap: 20px;
-            margin-top: 30px;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
         }
 
         .swipe-btn {
-            width: 80px;
-            height: 80px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 20px;
             cursor: pointer;
             user-select: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
         }
 
-        .swipe-left {
-            background: #ef4444;
+        @media (min-width: 768px) {
+            .swipe-btn {
+                width: 80px;
+                height: 80px;
+                font-size: 24px;
+            }
         }
 
-        .swipe-right {
-            background: #10b981;
+        .swipe-btn:active {
+            transform: scale(0.95);
+        }
+
+        .swipe-left-btn {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+        .swipe-right-btn {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .control-btn {
+            padding: 10px 20px;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 25px 0;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        @media (min-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+            }
         }
 
         .stat-card {
             background: #f8fafc;
-            padding: 20px;
+            padding: 15px;
             border-radius: 10px;
             text-align: center;
             border: 2px solid #e2e8f0;
         }
 
         .stat-number {
-            font-size: 32px;
+            font-size: 24px;
             font-weight: bold;
             color: #4f46e5;
-            margin: 10px 0;
+            margin: 5px 0;
+        }
+
+        @media (min-width: 768px) {
+            .stat-number {
+                font-size: 32px;
+            }
         }
 
         .iteration-selector {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
-            margin: 15px 0;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
         }
 
         .iteration-btn {
-            padding: 8px 16px;
+            padding: 6px 12px;
             background: #f1f5f9;
-            border-radius: 20px;
+            border-radius: 15px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
+            border: none;
+            white-space: nowrap;
         }
 
         .iteration-btn.active {
@@ -311,12 +523,14 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
             align-items: center;
             justify-content: center;
             z-index: 1000;
+            padding: 20px;
+            overflow-y: auto;
         }
 
         .modal.active {
@@ -325,25 +539,30 @@
 
         .modal-content {
             background: white;
-            padding: 30px;
+            padding: 20px;
             border-radius: 15px;
+            width: 100%;
             max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
+            max-height: 90vh;
             overflow-y: auto;
         }
 
-        .close-modal {
-            float: right;
-            cursor: pointer;
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
             font-size: 24px;
-        }
-
-        .flashcard-controls {
+            cursor: pointer;
             display: flex;
-            gap: 15px;
+            align-items: center;
             justify-content: center;
-            margin-top: 20px;
+            z-index: 1001;
         }
 
         .deck-list-item {
@@ -355,16 +574,85 @@
             background: #f8fafc;
             border-radius: 8px;
             border: 1px solid #e2e8f0;
+            flex-wrap: wrap;
         }
 
         .deck-actions {
             display: flex;
             gap: 8px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        @media (min-width: 768px) {
+            .deck-actions {
+                width: auto;
+                margin-top: 0;
+            }
         }
 
         .action-btn {
-            padding: 6px 12px;
+            padding: 8px 16px;
             font-size: 14px;
+            flex: 1;
+        }
+
+        @media (min-width: 768px) {
+            .action-btn {
+                flex: none;
+                padding: 6px 12px;
+            }
+        }
+
+        .mobile-only {
+            display: block;
+        }
+
+        @media (min-width: 768px) {
+            .mobile-only {
+                display: none;
+            }
+        }
+
+        .desktop-only {
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .desktop-only {
+                display: block;
+            }
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #10b981;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1002;
+            animation: slideUp 0.3s, fadeOut 0.3s 2.7s forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translate(-50%, 20px);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+            }
         }
     </style>
 </head>
@@ -375,8 +663,19 @@
             <p>Изучайте слова с расширенной статистикой</p>
         </header>
 
-        <div class="container">
-            <div class="sidebar">
+        <div class="mobile-only">
+            <div class="mobile-menu">
+                <select id="mobile-tab-select" onchange="switchMobileTab(this.value)">
+                    <option value="folders">📁 Папки</option>
+                    <option value="decks">🃏 Колоды</option>
+                    <option value="multi">🎯 Мультиколода</option>
+                    <option value="stats">📊 Статистика</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <div class="sidebar desktop-only">
                 <div class="tab-buttons">
                     <button class="tab-btn active" data-tab="folders">📁 Папки</button>
                     <button class="tab-btn" data-tab="decks">🃏 Колоды</button>
@@ -395,7 +694,7 @@
                 </div>
 
                 <div id="multi-tab" class="tab-content">
-                    <h3>Выберите колоды для изучения:</h3>
+                    <h3>Выберите колоды:</h3>
                     <div id="multi-decks-select"></div>
                     <div class="form-group">
                         <label>Режим отбора слов:</label>
@@ -433,8 +732,8 @@
                 </div>
             </div>
 
-            <div class="main-content">
-                <div id="main-content">
+            <div class="content-area">
+                <div id="main-content" style="flex: 1;">
                     <h2>Добро пожаловать!</h2>
                     <p>Создайте свою первую колоду карточек или выберите существующую для изучения.</p>
                     <div class="progress-info">
@@ -446,28 +745,80 @@
         </div>
     </div>
 
+    <!-- Экран изучения (полноэкранный) -->
+    <div class="study-screen" id="study-screen">
+        <button class="close-btn" onclick="exitStudy()">×</button>
+        <div class="study-header">
+            <div id="study-title">Изучение</div>
+            <div id="study-progress">0/0</div>
+        </div>
+
+        <div class="study-content">
+            <div class="swipe-indicator swipe-left" id="swipe-left-indicator">Не знаю</div>
+            <div class="swipe-indicator swipe-right" id="swipe-right-indicator">Знаю</div>
+
+            <div class="card" id="flashcard" ontouchstart="handleTouchStart(event)" ontouchmove="handleTouchMove(event)" ontouchend="handleTouchEnd(event)">
+                <div class="card-label" id="card-label">Лицевая сторона</div>
+                <div class="card-inner" id="card-inner">
+                    <div class="card-front" id="card-front"></div>
+                    <div class="card-back" id="card-back"></div>
+                </div>
+            </div>
+
+            <div class="progress-info">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <div>Знаю: <span id="known-count">0</span></div>
+                    <div>Не знаю: <span id="unknown-count">0</span></div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div style="text-align: center; margin-top: 5px; font-size: 14px;" id="remaining-cards">Осталось: 0</div>
+            </div>
+        </div>
+
+        <div class="study-controls">
+            <button class="control-btn" onclick="toggleShuffle()" id="shuffle-btn">🔀 Перемешивать: выкл</button>
+            <button class="control-btn" onclick="toggleReverse()" id="reverse-btn">🔄 Обратно: выкл</button>
+            <button class="control-btn btn-danger" onclick="restartDeck()">🔄 Начать заново</button>
+        </div>
+
+        <div class="study-controls">
+            <div class="swipe-btn swipe-left-btn" onclick="markUnknown()" ontouchstart="this.style.transform='scale(0.95)'" ontouchend="this.style.transform='scale(1)'">
+                ❌ Не знаю
+            </div>
+            <div class="swipe-btn" onclick="flipCard()" ontouchstart="this.style.transform='scale(0.95)'" ontouchend="this.style.transform='scale(1)'" style="background: #4f46e5; color: white;">
+                🔄 Перевернуть
+            </div>
+            <div class="swipe-btn swipe-right-btn" onclick="markKnown()" ontouchstart="this.style.transform='scale(0.95)'" ontouchend="this.style.transform='scale(1)'">
+                ✅ Знаю
+            </div>
+        </div>
+    </div>
+
     <!-- Модальные окна -->
     <div id="create-folder-modal" class="modal">
         <div class="modal-content">
-            <span class="close-modal" onclick="closeModal('create-folder-modal')">×</span>
             <h3>Создать папку</h3>
-            <input type="text" id="folder-name" placeholder="Название папки">
+            <div class="form-group">
+                <input type="text" id="folder-name" placeholder="Название папки">
+            </div>
             <button onclick="createFolder()" class="btn-success">Создать</button>
+            <button onclick="closeModal('create-folder-modal')" class="btn-secondary">Отмена</button>
         </div>
     </div>
 
     <div id="create-deck-modal" class="modal">
         <div class="modal-content">
-            <span class="close-modal" onclick="closeModal('create-deck-modal')">×</span>
             <h3>Создать колоду</h3>
             <div class="form-group">
                 <input type="text" id="deck-name" placeholder="Название колоды">
             </div>
             <div class="form-group">
                 <textarea id="deck-words" placeholder="Введите слова в формате:
-английское слово - перевод
-apple - яблоко
-cat - кот
+английское слово: перевод
+apple: яблоко
+cat: кот
 ..." rows="10" style="width: 100%; padding: 10px;"></textarea>
             </div>
             <div class="form-group">
@@ -477,60 +828,22 @@ cat - кот
                 </select>
             </div>
             <button onclick="createDeck()" class="btn-success">Создать колоду</button>
+            <button onclick="closeModal('create-deck-modal')" class="btn-secondary">Отмена</button>
         </div>
     </div>
 
     <div id="add-words-modal" class="modal">
         <div class="modal-content">
-            <span class="close-modal" onclick="closeModal('add-words-modal')">×</span>
             <h3>Добавить слова</h3>
-            <textarea id="new-words" placeholder="Введите слова в формате:
-английское слово - перевод
-apple - яблоко
-cat - кот
+            <div class="form-group">
+                <textarea id="new-words" placeholder="Введите слова в формате:
+английское слово: перевод
+apple: яблоко
+cat: кот
 ..." rows="8" style="width: 100%; padding: 10px;"></textarea>
+            </div>
             <button onclick="addWordsToDeck()" class="btn-success">Добавить</button>
-        </div>
-    </div>
-
-    <div id="study-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeModal('study-modal')">×</span>
-            <h3 id="study-title">Изучение</h3>
-            
-            <div class="flashcard-controls">
-                <label>
-                    <input type="checkbox" id="shuffle-cards"> Перемешивать
-                </label>
-                <label>
-                    <input type="checkbox" id="reverse-cards"> Обратная сторона
-                </label>
-                <button onclick="restartDeck()" class="btn-danger">Начать заново</button>
-            </div>
-
-            <div class="progress-info">
-                <div>Прогресс: <span id="current-card">0</span>/<span id="total-cards">0</span></div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill"></div>
-                </div>
-                <div>Знаю: <span id="known-count">0</span> | Не знаю: <span id="unknown-count">0</span></div>
-            </div>
-
-            <div class="card" id="flashcard" onclick="flipCard()">
-                <div class="card-inner">
-                    <div class="card-front" id="card-front"></div>
-                    <div class="card-back" id="card-back"></div>
-                </div>
-            </div>
-
-            <div class="swipe-buttons">
-                <div class="swipe-btn swipe-left" onclick="markUnknown()">
-                    ❌ Не знаю
-                </div>
-                <div class="swipe-btn swipe-right" onclick="markKnown()">
-                    ✅ Знаю
-                </div>
-            </div>
+            <button onclick="closeModal('add-words-modal')" class="btn-secondary">Отмена</button>
         </div>
     </div>
 
@@ -539,10 +852,14 @@ cat - кот
         let appData = {
             decks: [],
             folders: [],
-            currentDeck: null,
-            currentMultiDeck: null,
-            studySession: null
+            currentStudy: null
         };
+
+        // Переменные для смахивания
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let isSwiping = false;
+        let swipeThreshold = 50;
 
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', () => {
@@ -551,13 +868,26 @@ cat - кот
             renderFoldersTree();
             renderDecksList();
             updateStats();
+            initMobile();
         });
+
+        // Инициализация мобильной версии
+        function initMobile() {
+            if (window.innerWidth < 768) {
+                // Показываем первую вкладку на мобильных
+                showTab('folders');
+            }
+        }
 
         // Загрузка данных из localStorage
         function loadData() {
             const saved = localStorage.getItem('flashcardAppData');
             if (saved) {
-                appData = JSON.parse(saved);
+                try {
+                    appData = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Ошибка загрузки данных:', e);
+                }
             }
         }
 
@@ -566,21 +896,40 @@ cat - кот
             localStorage.setItem('flashcardAppData', JSON.stringify(appData));
         }
 
+        // Переключение вкладок на мобильных
+        function switchMobileTab(tabId) {
+            showTab(tabId);
+        }
+
+        // Показать вкладку
+        function showTab(tabId) {
+            // Обновляем активные вкладки
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabId}-tab`).classList.add('active');
+            
+            // Обновляем кнопки на десктопе
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tab === tabId) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Обновляем select на мобильных
+            const mobileSelect = document.getElementById('mobile-tab-select');
+            if (mobileSelect) {
+                mobileSelect.value = tabId;
+            }
+        }
+
         // Инициализация вкладок
         function initTabs() {
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const tabId = btn.dataset.tab;
-                    
-                    // Обновляем активные кнопки
-                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    
-                    // Обновляем активные вкладки
-                    document.querySelectorAll('.tab-content').forEach(content => {
-                        content.classList.remove('active');
-                    });
-                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                    showTab(tabId);
                 });
             });
         }
@@ -588,11 +937,13 @@ cat - кот
         // Показ модального окна
         function showModal(modalId) {
             document.getElementById(modalId).classList.add('active');
+            document.body.style.overflow = 'hidden';
         }
 
         // Закрытие модального окна
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
+            document.body.style.overflow = 'auto';
         }
 
         // Создание папки
@@ -602,7 +953,7 @@ cat - кот
 
         function createFolder() {
             const name = document.getElementById('folder-name').value.trim();
-            if (!name) return alert('Введите название папки');
+            if (!name) return showNotification('Введите название папки');
 
             const folder = {
                 id: Date.now(),
@@ -616,6 +967,7 @@ cat - кот
             document.getElementById('folder-name').value = '';
             renderFoldersTree();
             updateStats();
+            showNotification('Папка создана');
         }
 
         // Создание колоды
@@ -633,11 +985,11 @@ cat - кот
             const wordsText = document.getElementById('deck-words').value.trim();
             const folderId = document.getElementById('deck-folder').value;
 
-            if (!name) return alert('Введите название колоды');
-            if (!wordsText) return alert('Введите слова');
+            if (!name) return showNotification('Введите название колоды');
+            if (!wordsText) return showNotification('Введите слова');
 
             const words = parseWords(wordsText);
-            if (words.length === 0) return alert('Нет корректных слов в формате "слово - перевод"');
+            if (words.length === 0) return showNotification('Нет корректных слов в формате "слово:перевод"');
 
             const deck = {
                 id: Date.now(),
@@ -645,7 +997,8 @@ cat - кот
                 words: words,
                 folderId: folderId || null,
                 createdAt: new Date().toISOString(),
-                iterations: []
+                iterations: [],
+                currentSession: null
             };
 
             appData.decks.push(deck);
@@ -665,9 +1018,10 @@ cat - кот
             renderFoldersTree();
             renderDecksList();
             updateStats();
+            showNotification('Колода создана');
         }
 
-        // Парсинг слов из текста
+        // Парсинг слов из текста (используем двоеточие)
         function parseWords(text) {
             const lines = text.split('\n');
             const words = [];
@@ -677,15 +1031,17 @@ cat - кот
                 line = line.trim();
                 if (!line) return;
 
-                const parts = line.split('-').map(p => p.trim());
-                if (parts.length >= 2) {
-                    const [eng, ...rusParts] = parts;
-                    const rus = rusParts.join('-');
-                    words.push({
-                        eng: eng,
-                        rus: rus,
-                        index: index++
-                    });
+                const colonIndex = line.indexOf(':');
+                if (colonIndex !== -1) {
+                    const eng = line.substring(0, colonIndex).trim();
+                    const rus = line.substring(colonIndex + 1).trim();
+                    if (eng && rus) {
+                        words.push({
+                            eng: eng,
+                            rus: rus,
+                            index: index++
+                        });
+                    }
                 }
             });
 
@@ -705,6 +1061,7 @@ cat - кот
                 tree.appendChild(rootItem);
 
                 const subList = document.createElement('ul');
+                subList.style.paddingLeft = '20px';
                 rootDecks.forEach(deck => {
                     const deckItem = document.createElement('li');
                     deckItem.className = 'tree-item deck';
@@ -731,6 +1088,7 @@ cat - кот
                 tree.appendChild(folderItem);
 
                 const subList = document.createElement('ul');
+                subList.style.paddingLeft = '20px';
                 const folderDecks = appData.decks.filter(d => d.folderId == folder.id);
                 
                 folderDecks.forEach(deck => {
@@ -792,7 +1150,7 @@ cat - кот
             if (!appData.currentDeck) return;
             
             const text = document.getElementById('new-words').value.trim();
-            if (!text) return alert('Введите слова');
+            if (!text) return showNotification('Введите слова');
 
             const newWords = parseWords(text);
             const existingEngWords = new Set(appData.currentDeck.words.map(w => w.eng.toLowerCase()));
@@ -810,7 +1168,7 @@ cat - кот
             saveData();
             closeModal('add-words-modal');
             document.getElementById('new-words').value = '';
-            alert(`Добавлено ${addedCount} новых слов`);
+            showNotification(`Добавлено ${addedCount} новых слов`);
             renderFoldersTree();
             renderDecksList();
             updateStats();
@@ -831,6 +1189,7 @@ cat - кот
             renderFoldersTree();
             renderDecksList();
             updateStats();
+            showNotification('Колода удалена');
         }
 
         // Удаление папки
@@ -847,69 +1206,92 @@ cat - кот
             saveData();
             renderFoldersTree();
             updateStats();
+            showNotification('Папка удалена');
         }
 
         // Изучение колоды
         function studyDeck(deckId) {
-            appData.currentDeck = appData.decks.find(d => d.id == deckId);
+            const deck = appData.decks.find(d => d.id == deckId);
+            if (!deck) return;
             
-            // Создаем сессию изучения
-            appData.studySession = {
-                deckId: deckId,
-                currentIndex: 0,
-                knownWords: new Set(),
-                unknownWords: new Set(),
-                currentIteration: (appData.currentDeck.iterations?.length || 0) + 1,
-                isMultiDeck: false
-            };
-
-            document.getElementById('study-title').textContent = `Изучение: ${appData.currentDeck.name}`;
-            showModal('study-modal');
+            // Сохраняем текущую колоду для изучения
+            appData.currentDeck = JSON.parse(JSON.stringify(deck));
+            
+            // Восстанавливаем сессию или создаем новую
+            if (deck.currentSession) {
+                // Восстанавливаем прогресс
+                appData.currentStudy = deck.currentSession;
+            } else {
+                // Создаем новую сессию изучения
+                appData.currentStudy = {
+                    deckId: deckId,
+                    currentIndex: 0,
+                    knownWords: [],
+                    unknownWords: [],
+                    currentIteration: (deck.iterations?.length || 0) + 1,
+                    shuffled: false,
+                    wordOrder: deck.words.map((_, idx) => idx)
+                };
+            }
+            
+            document.getElementById('study-title').textContent = deck.name;
+            document.getElementById('study-screen').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
             updateStudyUI();
         }
 
         // Обновление UI изучения
         function updateStudyUI() {
-            if (!appData.studySession || !appData.currentDeck) return;
+            if (!appData.currentStudy || !appData.currentDeck) return;
 
-            const session = appData.studySession;
-            const words = appData.currentDeck.words;
+            const study = appData.currentStudy;
+            const deck = appData.currentDeck;
             
-            if (words.length === 0) {
+            if (deck.words.length === 0) {
                 document.getElementById('card-front').textContent = 'Нет слов в колоде';
                 document.getElementById('card-back').textContent = 'Добавьте слова';
                 return;
             }
 
-            // Применяем перемешивание если нужно
-            if (document.getElementById('shuffle-cards').checked && !session.shuffled) {
-                shuffleArray(words);
-                session.shuffled = true;
-            }
-
-            const currentWord = words[session.currentIndex];
-            const showReverse = document.getElementById('reverse-cards').checked;
+            const currentWordIndex = study.wordOrder[study.currentIndex];
+            const currentWord = deck.words[currentWordIndex];
+            const showReverse = study.reversed || false;
 
             document.getElementById('card-front').textContent = showReverse ? currentWord.rus : currentWord.eng;
             document.getElementById('card-back').textContent = showReverse ? currentWord.eng : currentWord.rus;
+            document.getElementById('card-label').textContent = showReverse ? 'Обратная сторона' : 'Лицевая сторона';
             
             document.getElementById('flashcard').classList.remove('flipped');
             
             // Обновляем прогресс
-            document.getElementById('current-card').textContent = session.currentIndex + 1;
-            document.getElementById('total-cards').textContent = words.length;
-            document.getElementById('known-count').textContent = session.knownWords.size;
-            document.getElementById('unknown-count').textContent = session.unknownWords.size;
+            document.getElementById('study-progress').textContent = `${study.currentIndex + 1}/${deck.words.length}`;
+            document.getElementById('known-count').textContent = study.knownWords.length;
+            document.getElementById('unknown-count').textContent = study.unknownWords.length;
             
-            const progress = ((session.currentIndex) / words.length) * 100;
+            const progress = ((study.currentIndex) / deck.words.length) * 100;
             document.getElementById('progress-fill').style.width = `${progress}%`;
+            
+            const remaining = deck.words.length - (study.currentIndex);
+            document.getElementById('remaining-cards').textContent = `Осталось: ${remaining}`;
+            
+            // Обновляем кнопки
+            document.getElementById('shuffle-btn').textContent = `🔀 Перемешивать: ${study.shuffled ? 'вкл' : 'выкл'}`;
+            document.getElementById('reverse-btn').textContent = `🔄 Обратно: ${study.reversed ? 'вкл' : 'выкл'}`;
+            
+            // Сохраняем прогресс в колоду
+            saveStudyProgress();
         }
 
-        // Перемешивание массива
-        function shuffleArray(array) {
-            for (let i = array.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[j]] = [array[j], array[i]];
+        // Сохранение прогресса изучения
+        function saveStudyProgress() {
+            if (!appData.currentStudy || !appData.currentDeck) return;
+            
+            const deckIndex = appData.decks.findIndex(d => d.id === appData.currentDeck.id);
+            if (deckIndex !== -1) {
+                // Обновляем сессию
+                appData.decks[deckIndex].currentSession = appData.currentStudy;
+                saveData();
             }
         }
 
@@ -920,40 +1302,44 @@ cat - кот
 
         // Отметить как знаю
         function markKnown() {
-            if (!appData.studySession) return;
+            if (!appData.currentStudy) return;
             
-            const session = appData.studySession;
-            const currentWord = appData.currentDeck.words[session.currentIndex];
+            const study = appData.currentStudy;
+            const currentWordIndex = study.wordOrder[study.currentIndex];
             
-            session.knownWords.add(currentWord.index);
-            session.unknownWords.delete(currentWord.index);
+            if (!study.knownWords.includes(currentWordIndex)) {
+                study.knownWords.push(currentWordIndex);
+                // Удаляем из неизвестных если там есть
+                study.unknownWords = study.unknownWords.filter(idx => idx !== currentWordIndex);
+            }
             
             nextCard();
         }
 
         // Отметить как не знаю
         function markUnknown() {
-            if (!appData.studySession) return;
+            if (!appData.currentStudy) return;
             
-            const session = appData.studySession;
-            const currentWord = appData.currentDeck.words[session.currentIndex];
+            const study = appData.currentStudy;
+            const currentWordIndex = study.wordOrder[study.currentIndex];
             
-            session.unknownWords.add(currentWord.index);
-            session.knownWords.delete(currentWord.index);
+            if (!study.unknownWords.includes(currentWordIndex)) {
+                study.unknownWords.push(currentWordIndex);
+                // Удаляем из известных если там есть
+                study.knownWords = study.knownWords.filter(idx => idx !== currentWordIndex);
+            }
             
             nextCard();
         }
 
         // Следующая карточка
         function nextCard() {
-            if (!appData.studySession) return;
+            if (!appData.currentStudy) return;
             
-            const session = appData.studySession;
-            const words = appData.currentDeck.words;
+            const study = appData.currentStudy;
+            study.currentIndex++;
             
-            session.currentIndex++;
-            
-            if (session.currentIndex >= words.length) {
+            if (study.currentIndex >= appData.currentDeck.words.length) {
                 finishStudySession();
             } else {
                 updateStudyUI();
@@ -962,67 +1348,109 @@ cat - кот
 
         // Завершение сессии изучения
         function finishStudySession() {
-            if (!appData.studySession || !appData.currentDeck) return;
+            if (!appData.currentStudy || !appData.currentDeck) return;
             
-            const session = appData.studySession;
-            const deck = appData.currentDeck;
+            const study = appData.currentStudy;
+            const deckIndex = appData.decks.findIndex(d => d.id === appData.currentDeck.id);
             
-            // Сохраняем итерацию
-            const iteration = {
-                number: session.currentIteration,
-                date: new Date().toISOString(),
-                totalWords: deck.words.length,
-                knownWords: Array.from(session.knownWords),
-                unknownWords: Array.from(session.unknownWords)
-            };
-            
-            if (!deck.iterations) deck.iterations = [];
-            deck.iterations.push(iteration);
-            
-            saveData();
-            
-            alert(`Сессия завершена!\nЗнаете: ${session.knownWords.size}\nНе знаете: ${session.unknownWords.size}`);
-            
-            if (session.isMultiDeck) {
-                closeModal('study-modal');
-                updateStats();
-            } else {
-                // Показываем только неизученные слова
-                appData.studySession.currentIndex = 0;
-                appData.studySession.shuffled = false;
-                appData.currentDeck.words = deck.words.filter((_, idx) => 
-                    session.unknownWords.has(idx)
-                );
+            if (deckIndex !== -1) {
+                const deck = appData.decks[deckIndex];
                 
-                if (appData.currentDeck.words.length === 0) {
-                    alert('Все слова изучены!');
-                    closeModal('study-modal');
-                } else {
-                    updateStudyUI();
-                }
+                // Сохраняем итерацию
+                const iteration = {
+                    number: study.currentIteration,
+                    date: new Date().toISOString(),
+                    totalWords: deck.words.length,
+                    knownWords: [...study.knownWords],
+                    unknownWords: [...study.unknownWords]
+                };
+                
+                if (!deck.iterations) deck.iterations = [];
+                deck.iterations.push(iteration);
+                
+                // Очищаем текущую сессию
+                deck.currentSession = null;
+                
+                saveData();
+                
+                // Показываем результат
+                setTimeout(() => {
+                    alert(`Сессия завершена!\nЗнаете: ${study.knownWords.length}\nНе знаете: ${study.unknownWords.length}`);
+                    exitStudy();
+                }, 300);
             }
             
             updateStats();
         }
 
+        // Выход из режима изучения
+        function exitStudy() {
+            // Сохраняем прогресс перед выходом
+            saveStudyProgress();
+            
+            document.getElementById('study-screen').classList.remove('active');
+            document.body.style.overflow = 'auto';
+            
+            // Сбрасываем состояние
+            appData.currentStudy = null;
+            appData.currentDeck = null;
+            
+            // Обновляем UI
+            renderFoldersTree();
+            renderDecksList();
+            updateStats();
+        }
+
         // Начать заново
         function restartDeck() {
-            if (!appData.studySession) return;
+            if (!appData.currentStudy || !appData.currentDeck) return;
             
-            appData.studySession.currentIndex = 0;
-            appData.studySession.knownWords.clear();
-            appData.studySession.unknownWords.clear();
-            appData.studySession.shuffled = false;
+            appData.currentStudy.currentIndex = 0;
+            appData.currentStudy.knownWords = [];
+            appData.currentStudy.unknownWords = [];
             
-            // Восстанавливаем оригинальный порядок слов
-            if (appData.currentDeck && appData.studySession.deckId) {
-                const originalDeck = appData.decks.find(d => d.id == appData.studySession.deckId);
-                if (originalDeck) {
-                    appData.currentDeck.words = [...originalDeck.words];
-                }
+            // Сбрасываем порядок слов если нужно
+            if (!appData.currentStudy.shuffled) {
+                appData.currentStudy.wordOrder = appData.currentDeck.words.map((_, idx) => idx);
             }
             
             updateStudyUI();
+            showNotification('Сессия начата заново');
+        }
+
+        // Переключить перемешивание
+        function toggleShuffle() {
+            if (!appData.currentStudy) return;
+            
+            const study = appData.currentStudy;
+            study.shuffled = !study.shuffled;
+            
+            if (study.shuffled) {
+                // Перемешиваем порядок
+                shuffleArray(study.wordOrder);
+                study.currentIndex = 0;
+            } else {
+                // Возвращаем исходный порядок
+                study.wordOrder = appData.currentDeck.words.map((_, idx) => idx);
+            }
+            
+            updateStudyUI();
+        }
+
+        // Переключить обратную сторону
+        function toggleReverse() {
+            if (!appData.currentStudy) return;
+            
+            appData.currentStudy.reversed = !appData.currentStudy.reversed;
+            updateStudyUI();
+        }
+
+        // Перемешивание массива
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
         }
 
         // Мультиколода
@@ -1033,9 +1461,14 @@ cat - кот
             appData.decks.forEach(deck => {
                 const div = document.createElement('div');
                 div.innerHTML = `
-                    <label>
-                        <input type="checkbox" value="${deck.id}" data-deck="${deck.id}">
-                        ${deck.name} (${deck.words.length} слов, итераций: ${deck.iterations?.length || 0})
+                    <label style="display: flex; align-items: center; padding: 10px; background: #f8fafc; border-radius: 8px; margin: 5px 0;">
+                        <input type="checkbox" value="${deck.id}" data-deck="${deck.id}" style="margin-right: 10px;">
+                        <div>
+                            <strong>${deck.name}</strong>
+                            <div style="font-size: 0.9em; color: #666;">
+                                ${deck.words.length} слов, итераций: ${deck.iterations?.length || 0}
+                            </div>
+                        </div>
                     </label>
                 `;
                 container.appendChild(div);
@@ -1065,8 +1498,9 @@ cat - кот
                     container.appendChild(div);
                     
                     const selector = document.getElementById(`iterations-${deck.id}`);
+                    selector.innerHTML = '';
                     deck.iterations.forEach(iter => {
-                        const btn = document.createElement('div');
+                        const btn = document.createElement('button');
                         btn.className = 'iteration-btn';
                         btn.textContent = `Итерация ${iter.number}`;
                         btn.dataset.deckId = deck.id;
@@ -1089,11 +1523,12 @@ cat - кот
             ).map(input => parseInt(input.value));
             
             if (selectedDeckIds.length === 0) {
-                return alert('Выберите хотя бы одну колоду');
+                return showNotification('Выберите хотя бы одну колоду');
             }
             
             const mode = document.getElementById('multi-mode').value;
             let allWords = [];
+            let deckName = 'Мультиколода';
             
             selectedDeckIds.forEach(deckId => {
                 const deck = appData.decks.find(d => d.id == deckId);
@@ -1125,7 +1560,7 @@ cat - кот
                                 .map(w => ({...w, deckId: deck.id}));
                         }
                     } else {
-                        alert(`Для колоды "${deck.name}" не выбрана итерация`);
+                        showNotification(`Для колоды "${deck.name}" не выбрана итерация`);
                         return;
                     }
                 }
@@ -1134,27 +1569,30 @@ cat - кот
             });
             
             if (allWords.length === 0) {
-                return alert('Нет слов для изучения');
+                return showNotification('Нет слов для изучения');
             }
             
             // Создаем виртуальную колоду для изучения
             appData.currentDeck = {
                 id: 'multi-' + Date.now(),
-                name: 'Мультиколода',
+                name: deckName,
                 words: allWords
             };
             
-            appData.studySession = {
+            appData.currentStudy = {
                 deckId: 'multi',
                 currentIndex: 0,
-                knownWords: new Set(),
-                unknownWords: new Set(),
+                knownWords: [],
+                unknownWords: [],
                 currentIteration: 1,
-                isMultiDeck: true
+                shuffled: false,
+                wordOrder: allWords.map((_, idx) => idx)
             };
             
-            document.getElementById('study-title').textContent = 'Мультиколода';
-            showModal('study-modal');
+            document.getElementById('study-title').textContent = deckName;
+            document.getElementById('study-screen').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
             updateStudyUI();
         }
 
@@ -1213,11 +1651,73 @@ cat - кот
             }
         }
 
-        // Инициализация обновлений UI
-        document.getElementById('shuffle-cards').addEventListener('change', updateStudyUI);
-        document.getElementById('reverse-cards').addEventListener('change', updateStudyUI);
+        // Обработчики для смахивания
+        function handleTouchStart(event) {
+            touchStartX = event.touches[0].clientX;
+            isSwiping = true;
+        }
 
-        // Экспорт данных (для резервного копирования)
+        function handleTouchMove(event) {
+            if (!isSwiping) return;
+            
+            touchEndX = event.touches[0].clientX;
+            const diff = touchEndX - touchStartX;
+            
+            // Показываем индикаторы
+            if (diff > swipeThreshold) {
+                document.getElementById('swipe-right-indicator').classList.add('show');
+                document.getElementById('swipe-left-indicator').classList.remove('show');
+            } else if (diff < -swipeThreshold) {
+                document.getElementById('swipe-left-indicator').classList.add('show');
+                document.getElementById('swipe-right-indicator').classList.remove('show');
+            } else {
+                document.getElementById('swipe-left-indicator').classList.remove('show');
+                document.getElementById('swipe-right-indicator').classList.remove('show');
+            }
+            
+            // Смещаем карточку
+            const cardInner = document.getElementById('card-inner');
+            const rotate = diff * 0.1;
+            cardInner.style.transform = `rotateY(${rotate}deg)`;
+        }
+
+        function handleTouchEnd() {
+            if (!isSwiping) return;
+            
+            isSwiping = false;
+            const diff = touchEndX - touchStartX;
+            
+            // Сбрасываем положение карточки
+            const cardInner = document.getElementById('card-inner');
+            cardInner.style.transform = '';
+            
+            // Сбрасываем индикаторы
+            document.getElementById('swipe-left-indicator').classList.remove('show');
+            document.getElementById('swipe-right-indicator').classList.remove('show');
+            
+            // Определяем действие
+            if (diff > swipeThreshold) {
+                // Смахивание вправо - знаю
+                markKnown();
+            } else if (diff < -swipeThreshold) {
+                // Смахивание влево - не знаю
+                markUnknown();
+            }
+        }
+
+        // Уведомления
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // Экспорт данных
         function exportData() {
             const dataStr = JSON.stringify(appData, null, 2);
             const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -1248,9 +1748,9 @@ cat - кот
                         renderFoldersTree();
                         renderDecksList();
                         updateStats();
-                        alert('Данные успешно импортированы!');
+                        showNotification('Данные успешно импортированы!');
                     } catch (err) {
-                        alert('Ошибка при импорте данных');
+                        showNotification('Ошибка при импорте данных');
                     }
                 };
                 
@@ -1266,6 +1766,7 @@ cat - кот
             const exportBtn = document.createElement('button');
             exportBtn.textContent = '📤 Экспорт';
             exportBtn.style.marginRight = '10px';
+            exportBtn.style.marginTop = '10px';
             exportBtn.onclick = exportData;
             
             const importBtn = document.createElement('button');
@@ -1274,6 +1775,18 @@ cat - кот
             
             header.appendChild(exportBtn);
             header.appendChild(importBtn);
+        });
+
+        // Предотвращаем масштабирование на мобильных при двойном тапе
+        document.addEventListener('dblclick', (e) => {
+            if (window.innerWidth < 768) {
+                e.preventDefault();
+            }
+        });
+
+        // Обработка изменения ориентации
+        window.addEventListener('orientationchange', () => {
+            setTimeout(updateStudyUI, 100);
         });
     </script>
 </body>
