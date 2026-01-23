@@ -137,19 +137,41 @@
             display: block;
         }
         
-        /* Карточка */
-        .card {
+        /* Карточка с анимацией свайпа */
+        .card-container {
             perspective: 1000px;
             width: 100%;
             height: 220px;
             margin: 15px auto;
+            position: relative;
+            touch-action: pan-y pinch-zoom;
         }
         
         @media (min-width: 768px) {
-            .card {
-                height: 400px;
+            .card-container {
+                height: 280px;
                 max-width: 450px;
             }
+        }
+        
+        .card {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 0.6s, opacity 0.3s;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .card.swiping {
+            transition: none;
+        }
+        
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
         }
         
         .card-inner {
@@ -158,12 +180,6 @@
             position: relative;
             transform-style: preserve-3d;
             transition: transform 0.6s;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        
-        .card.flipped .card-inner {
-            transform: rotateY(180deg);
         }
         
         .card-front, .card-back {
@@ -200,6 +216,32 @@
             transform: rotateY(180deg);
         }
         
+        /* Индикаторы свайпа */
+        .swipe-indicator {
+            position: absolute;
+            top: 20px;
+            font-size: 24px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .swipe-left-indicator {
+            left: 20px;
+            color: #ef4444;
+        }
+        
+        .swipe-right-indicator {
+            right: 20px;
+            color: #10b981;
+        }
+        
+        .swipe-indicator.show {
+            opacity: 0.8;
+            transform: scale(1.2);
+        }
+        
         /* Кнопки смахивания - только эмодзи */
         .swipe-buttons {
             display: flex;
@@ -219,6 +261,7 @@
             font-size: 28px;
             cursor: pointer;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
         
         .swipe-left {
@@ -362,11 +405,20 @@
             border: none;
             cursor: pointer;
             font-size: 18px;
+            transition: background 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #e2e8f0;
         }
         
         .control-btn.active {
             background: #4f46e5;
             color: white;
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
         }
         
         /* Список колод с кнопками в одну строку */
@@ -579,12 +631,29 @@
         .form-group {
             margin-bottom: 12px;
         }
+        
+        /* Анимации */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes swipeRight {
+            from { transform: translateX(0) rotate(0); }
+            to { transform: translateX(100px) rotate(10deg); }
+        }
+        
+        @keyframes swipeLeft {
+            from { transform: translateX(0) rotate(0); }
+            to { transform: translateX(-100px) rotate(-10deg); }
+        }
     </style>
 </head>
 <body>
     <div class="app">
         <header>
-            
+            <h1 style="font-size: 1.3rem; margin-bottom: 3px;">📚 Умные Карточки</h1>
+            <p style="font-size: 0.8rem;">Изучайте слова с расширенной статистикой</p>
             <div style="margin-top: 8px;">
                 <button onclick="exportData()" style="padding: 6px 12px; font-size: 13px; margin-right: 8px;">📤</button>
                 <button onclick="importData()" style="padding: 6px 12px; font-size: 13px;">📥</button>
@@ -716,6 +785,8 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             <div class="flashcard-controls">
                 <button class="control-btn" id="shuffle-btn" onclick="toggleShuffle()" title="Перемешивать">🔀</button>
                 <button class="control-btn" id="reverse-btn" onclick="toggleReverse()" title="Обратная сторона">🔄</button>
+                <button class="control-btn" id="speech-btn" onclick="speakCurrentWord()" title="Произнести слово">🔊</button>
+                <button class="control-btn" id="prev-btn" onclick="goToPreviousCard()" title="Предыдущая карточка">◀️</button>
                 <button class="control-btn" onclick="restartSession()" title="Начать заново" style="background: #fee2e2; color: #ef4444;">🔄</button>
                 <button class="control-btn" onclick="saveCurrentMultiDeck()" id="save-current-multi-deck-btn" title="Сохранить как колоду" style="display: none;">💾</button>
             </div>
@@ -731,11 +802,16 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 </div>
             </div>
 
-            <!-- Карточка -->
-            <div class="card" id="flashcard" onclick="flipCard()">
-                <div class="card-inner">
-                    <div class="card-front" id="card-front">Загрузка...</div>
-                    <div class="card-back" id="card-back">Загрузка...</div>
+            <!-- Карточка с индикаторами свайпа -->
+            <div class="card-container">
+                <div class="swipe-indicator swipe-left-indicator">❌</div>
+                <div class="swipe-indicator swipe-right-indicator">✅</div>
+                
+                <div class="card" id="flashcard">
+                    <div class="card-inner">
+                        <div class="card-front" id="card-front">Загрузка...</div>
+                        <div class="card-back" id="card-back">Загрузка...</div>
+                    </div>
                 </div>
             </div>
 
@@ -760,13 +836,21 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 shuffle: false,
                 reverse: false
             },
-            studyProgress: {} // Храним прогресс изучения для каждой колоды
+            studyProgress: {}
         };
 
         let currentStudySession = null;
         let currentDeckId = null;
         let currentMultiDeckConfig = null;
-        let selectedIterations = {}; // Храним выбранные итерации для мультиколоды
+        let selectedIterations = {};
+        
+        // Переменные для управления свайпом
+        let swipeStartX = 0;
+        let swipeStartY = 0;
+        let isSwiping = false;
+        let swipeThreshold = 80; // Минимальное расстояние свайпа
+        let swipeCard = null;
+        let cardHistory = []; // История карточек для кнопки "назад"
 
         // Инициализация
         document.addEventListener('DOMContentLoaded', () => {
@@ -776,7 +860,376 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             renderDecksList();
             updateStats();
             initEventListeners();
+            
+            // Инициализируем распознавание речи
+            initSpeechSynthesis();
         });
+
+        // Инициализация синтеза речи
+        function initSpeechSynthesis() {
+            if ('speechSynthesis' in window) {
+                // Проверяем доступность голосов
+                speechSynthesis.onvoiceschanged = () => {
+                    console.log('Голоса загружены');
+                };
+            } else {
+                console.warn('Синтез речи не поддерживается в этом браузере');
+            }
+        }
+
+        // Произнесение текущего слова
+        function speakCurrentWord() {
+            if (!currentStudySession || !currentStudySession.sessionWords) return;
+            
+            const session = currentStudySession;
+            const currentWord = session.sessionWords[session.currentIndex];
+            
+            if (!currentWord) return;
+            
+            const wordToSpeak = appData.settings.reverse ? currentWord.rus : currentWord.eng;
+            
+            if ('speechSynthesis' in window) {
+                // Останавливаем любую текущую речь
+                speechSynthesis.cancel();
+                
+                // Создаем новое высказывание
+                const utterance = new SpeechSynthesisUtterance(wordToSpeak);
+                
+                // Настройки
+                utterance.lang = 'en-US'; // Для английских слов
+                utterance.rate = 0.9; // Немного медленнее
+                utterance.pitch = 1;
+                utterance.volume = 1;
+                
+                // Пытаемся найти английский голос
+                const voices = speechSynthesis.getVoices();
+                const englishVoice = voices.find(voice => 
+                    voice.lang.startsWith('en-') && voice.lang.includes('US')
+                );
+                
+                if (englishVoice) {
+                    utterance.voice = englishVoice;
+                }
+                
+                // Визуальная обратная связь
+                const speechBtn = document.getElementById('speech-btn');
+                const originalText = speechBtn.textContent;
+                speechBtn.textContent = '🔊';
+                speechBtn.style.background = '#4f46e5';
+                speechBtn.style.color = 'white';
+                
+                utterance.onend = () => {
+                    speechBtn.textContent = originalText;
+                    speechBtn.style.background = '';
+                    speechBtn.style.color = '';
+                };
+                
+                utterance.onerror = () => {
+                    speechBtn.textContent = originalText;
+                    speechBtn.style.background = '';
+                    speechBtn.style.color = '';
+                };
+                
+                // Произносим слово
+                speechSynthesis.speak(utterance);
+            } else {
+                alert('Функция произнесения слов не поддерживается в вашем браузере');
+            }
+        }
+
+        // Переход к предыдущей карточке
+        function goToPreviousCard() {
+            if (!currentStudySession || cardHistory.length === 0) return;
+            
+            const session = currentStudySession;
+            
+            // Получаем предыдущее состояние из истории
+            const prevState = cardHistory.pop();
+            
+            if (prevState) {
+                // Восстанавливаем состояние
+                session.currentIndex = prevState.currentIndex;
+                session.knownWords = new Set(prevState.knownWords);
+                session.unknownWords = new Set(prevState.unknownWords);
+                
+                // Обновляем UI
+                updateStudyUI();
+                
+                // Произносим слово
+                if (prevState.wordId) {
+                    setTimeout(speakCurrentWord, 300);
+                }
+            }
+        }
+
+        // Сохранение состояния карточки в историю
+        function saveCardToHistory() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            const currentWord = session.sessionWords[session.currentIndex];
+            
+            if (!currentWord) return;
+            
+            // Сохраняем текущее состояние перед изменением
+            cardHistory.push({
+                currentIndex: session.currentIndex,
+                knownWords: Array.from(session.knownWords),
+                unknownWords: Array.from(session.unknownWords),
+                wordId: currentWord.id,
+                timestamp: Date.now()
+            });
+            
+            // Ограничиваем размер истории (последние 10 карточек)
+            if (cardHistory.length > 10) {
+                cardHistory.shift();
+            }
+        }
+
+        // Инициализация свайпа
+        function initSwipe(cardElement) {
+            if (!cardElement) return;
+            
+            swipeCard = cardElement;
+            
+            // Начало касания
+            cardElement.addEventListener('touchstart', handleTouchStart, { passive: true });
+            cardElement.addEventListener('mousedown', handleMouseDown);
+            
+            // Движение
+            cardElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+            cardElement.addEventListener('mousemove', handleMouseMove);
+            
+            // Конец касания
+            cardElement.addEventListener('touchend', handleTouchEnd);
+            cardElement.addEventListener('mouseup', handleMouseUp);
+            cardElement.addEventListener('mouseleave', handleMouseLeave);
+        }
+
+        // Обработчики для touch событий
+        function handleTouchStart(e) {
+            if (e.touches.length !== 1) return;
+            
+            swipeStartX = e.touches[0].clientX;
+            swipeStartY = e.touches[0].clientY;
+            isSwiping = true;
+            
+            if (swipeCard) {
+                swipeCard.classList.add('swiping');
+            }
+            
+            // Показываем индикаторы
+            showSwipeIndicators();
+        }
+
+        function handleTouchMove(e) {
+            if (!isSwiping || e.touches.length !== 1) return;
+            
+            e.preventDefault();
+            
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
+            updateSwipePosition(currentX, currentY);
+        }
+
+        function handleTouchEnd(e) {
+            if (!isSwiping) return;
+            
+            isSwiping = false;
+            
+            if (swipeCard) {
+                swipeCard.classList.remove('swiping');
+                finishSwipe();
+            }
+            
+            // Скрываем индикаторы
+            hideSwipeIndicators();
+        }
+
+        // Обработчики для mouse событий (для десктопов)
+        function handleMouseDown(e) {
+            swipeStartX = e.clientX;
+            swipeStartY = e.clientY;
+            isSwiping = true;
+            
+            if (swipeCard) {
+                swipeCard.classList.add('swiping');
+            }
+            
+            showSwipeIndicators();
+        }
+
+        function handleMouseMove(e) {
+            if (!isSwiping) return;
+            
+            e.preventDefault();
+            
+            const currentX = e.clientX;
+            const currentY = e.clientY;
+            
+            updateSwipePosition(currentX, currentY);
+        }
+
+        function handleMouseUp() {
+            if (!isSwiping) return;
+            
+            isSwiping = false;
+            
+            if (swipeCard) {
+                swipeCard.classList.remove('swiping');
+                finishSwipe();
+            }
+            
+            hideSwipeIndicators();
+        }
+
+        function handleMouseLeave() {
+            if (!isSwiping) return;
+            
+            isSwiping = false;
+            
+            if (swipeCard) {
+                swipeCard.classList.remove('swiping');
+                swipeCard.style.transform = '';
+            }
+            
+            hideSwipeIndicators();
+        }
+
+        // Обновление позиции при свайпе
+        function updateSwipePosition(currentX, currentY) {
+            if (!swipeCard) return;
+            
+            const deltaX = currentX - swipeStartX;
+            const deltaY = currentY - swipeStartY;
+            
+            // Проверяем, что свайп преимущественно горизонтальный
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                const rotation = deltaX * 0.1; // Немного вращаем карточку
+                
+                // Применяем трансформацию
+                swipeCard.style.transform = `translateX(${deltaX}px) rotate(${rotation}deg)`;
+                
+                // Показываем соответствующий индикатор
+                if (deltaX > swipeThreshold * 0.5) {
+                    showSwipeRightIndicator();
+                } else if (deltaX < -swipeThreshold * 0.5) {
+                    showSwipeLeftIndicator();
+                } else {
+                    hideSwipeIndicators();
+                }
+            }
+        }
+
+        // Завершение свайпа
+        function finishSwipe() {
+            if (!swipeCard) return;
+            
+            const currentTransform = swipeCard.style.transform;
+            const translateX = parseFloat(currentTransform.match(/translateX\(([-\d.]+)px\)/)?.[1] || 0);
+            
+            // Сбрасываем трансформацию
+            swipeCard.style.transform = '';
+            
+            // Проверяем, достаточно ли длинный был свайп
+            if (Math.abs(translateX) > swipeThreshold) {
+                if (translateX > 0) {
+                    // Свайп вправо - "Знаю"
+                    markKnownWithAnimation('right');
+                } else {
+                    // Свайп влево - "Не знаю"
+                    markUnknownWithAnimation('left');
+                }
+            }
+        }
+
+        // Анимация свайпа вправо
+        function markKnownWithAnimation(direction) {
+            if (!swipeCard) return;
+            
+            // Сохраняем в историю перед изменением
+            saveCardToHistory();
+            
+            // Анимация
+            swipeCard.style.transition = 'transform 0.3s, opacity 0.3s';
+            
+            if (direction === 'right') {
+                swipeCard.style.transform = 'translateX(200px) rotate(15deg)';
+            } else {
+                swipeCard.style.transform = 'translateX(-200px) rotate(-15deg)';
+            }
+            swipeCard.style.opacity = '0';
+            
+            // После анимации вызываем соответствующую функцию
+            setTimeout(() => {
+                if (direction === 'right') {
+                    markKnown();
+                } else {
+                    markUnknown();
+                }
+                
+                // Сбрасываем стили
+                swipeCard.style.transition = '';
+                swipeCard.style.transform = '';
+                swipeCard.style.opacity = '';
+            }, 300);
+        }
+
+        // Анимация свайпа влево
+        function markUnknownWithAnimation(direction) {
+            markKnownWithAnimation(direction); // Используем ту же функцию
+        }
+
+        // Показать индикаторы свайпа
+        function showSwipeIndicators() {
+            const leftIndicator = document.querySelector('.swipe-left-indicator');
+            const rightIndicator = document.querySelector('.swipe-right-indicator');
+            
+            if (leftIndicator && rightIndicator) {
+                leftIndicator.style.display = 'block';
+                rightIndicator.style.display = 'block';
+            }
+        }
+
+        // Показать индикатор свайпа вправо
+        function showSwipeRightIndicator() {
+            const indicator = document.querySelector('.swipe-right-indicator');
+            if (indicator) {
+                indicator.classList.add('show');
+            }
+            
+            const leftIndicator = document.querySelector('.swipe-left-indicator');
+            if (leftIndicator) {
+                leftIndicator.classList.remove('show');
+            }
+        }
+
+        // Показать индикатор свайпа влево
+        function showSwipeLeftIndicator() {
+            const indicator = document.querySelector('.swipe-left-indicator');
+            if (indicator) {
+                indicator.classList.add('show');
+            }
+            
+            const rightIndicator = document.querySelector('.swipe-right-indicator');
+            if (rightIndicator) {
+                rightIndicator.classList.remove('show');
+            }
+        }
+
+        // Скрыть индикаторы свайпа
+        function hideSwipeIndicators() {
+            const leftIndicator = document.querySelector('.swipe-left-indicator');
+            const rightIndicator = document.querySelector('.swipe-right-indicator');
+            
+            if (leftIndicator) {
+                leftIndicator.classList.remove('show');
+            }
+            if (rightIndicator) {
+                rightIndicator.classList.remove('show');
+            }
+        }
 
         // Загрузка данных
         function loadData() {
@@ -1204,6 +1657,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
             
             currentDeckId = deckId;
+            cardHistory = []; // Сбрасываем историю при начале новой сессии
             
             // Проверяем сохраненный прогресс
             const savedProgress = appData.studyProgress[deckId];
@@ -1266,6 +1720,12 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             document.getElementById('study-title').textContent = deck.name;
             showModal('study-modal');
             updateStudyUI();
+            
+            // Инициализируем свайп для карточки
+            setTimeout(() => {
+                const cardElement = document.getElementById('flashcard');
+                initSwipe(cardElement);
+            }, 100);
         }
 
         // Обновление UI изучения
@@ -1514,6 +1974,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             currentStudySession = null;
             currentDeckId = null;
             currentMultiDeckConfig = null;
+            cardHistory = [];
             
             closeModal('study-modal');
             updateStats();
@@ -1524,6 +1985,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             if (!currentStudySession) return;
             
             const session = currentStudySession;
+            cardHistory = [];
             
             if (session.isMultiDeck) {
                 // Для мультиколоды перезагружаем из конфигурации
@@ -1786,6 +2248,12 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             document.getElementById('study-title').textContent = `Мультиколода (${totalWords})`;
             showModal('study-modal');
             updateStudyUI();
+            
+            // Инициализируем свайп для карточки
+            setTimeout(() => {
+                const cardElement = document.getElementById('flashcard');
+                initSwipe(cardElement);
+            }, 100);
         }
 
         // Начать мультиколоду
