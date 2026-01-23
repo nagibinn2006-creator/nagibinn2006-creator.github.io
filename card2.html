@@ -1548,122 +1548,9 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
         }
 
         // Изучение колоды - ГЛАВНОЕ ИСПРАВЛЕНИЕ
-        function studyDeck(deckId) {
-            const deck = appData.decks.find(d => d.id === deckId);
-            if (!deck || deck.words.length === 0) {
-                alert('Колода пуста или не найдена');
-                return;
-            }
-            
-            currentDeckId = deckId;
-            cardHistory = [];
-            updatePrevButton();
-            
-            // Проверяем сохраненный прогресс
-            const savedProgress = appData.studyProgress[deckId];
-            let sessionWords = [];
-            let startIndex = 0;
-            let knownWords = new Set();
-            let unknownWords = new Set();
-            let iterationNumber = deck.iterations.length + 1;
-            
-            if (savedProgress && savedProgress.sessionWords && savedProgress.sessionWords.length > 0) {
-                // ВОССТАНАВЛИВАЕМ СЕССИЮ ИЗ СОХРАНЕННОГО ПРОГРЕССА
-                const wordMap = new Map(deck.words.map(w => [w.id, w]));
-                
-                // Восстанавливаем слова по ID
-                savedProgress.sessionWords.forEach(wordId => {
-                    if (wordMap.has(wordId)) {
-                        sessionWords.push(wordMap.get(wordId));
-                    }
-                });
-                
-                // Восстанавливаем состояние
-                startIndex = savedProgress.currentIndex || 0;
-                if (startIndex >= sessionWords.length) startIndex = 0;
-                knownWords = new Set(savedProgress.knownWords || []);
-                unknownWords = new Set(savedProgress.unknownWords || []);
-                
-                console.log('Восстановлена сессия:', sessionWords.length, 'слов, позиция:', startIndex);
-            } else {
-                // НЕТ СОХРАНЕННОГО ПРОГРЕССА - НАЧИНАЕМ С НАЧАЛА
-                sessionWords = [...deck.words];
-                startIndex = 0;
-                knownWords = new Set();
-                unknownWords = new Set();
-                
-                console.log('Начинаем новую сессию');
-            }
-            
-            // Инициализация сессии
-            currentStudySession = {
-                deckId: deckId,
-                currentIndex: startIndex,
-                knownWords: knownWords,
-                unknownWords: unknownWords,
-                sessionWords: sessionWords,
-                originalWordsCount: deck.words.length,
-                iterationNumber: iterationNumber,
-                isMultiDeck: false
-            };
-            
-            // Обновляем кнопки настроек
-            document.getElementById('shuffle-btn').classList.toggle('active', appData.settings.shuffle);
-            document.getElementById('reverse-btn').classList.toggle('active', appData.settings.reverse);
-            document.getElementById('save-current-multi-deck-btn').style.display = 'none';
-            
-            if (appData.settings.shuffle) {
-                shuffleWords();
-            }
-            
-            document.getElementById('study-title').textContent = deck.name;
-            showModal('study-modal');
-            updateStudyUI();
-            
-            setTimeout(() => {
-                const cardElement = document.getElementById('flashcard');
-                initSwipe(cardElement);
-            }, 100);
-        }
+      
 
-        // Обновление UI изучения
-        function updateStudyUI() {
-            if (!currentStudySession) return;
-            
-            const session = currentStudySession;
-            const totalWords = session.sessionWords.length;
-            
-            if (totalWords === 0) {
-                document.getElementById('card-front').textContent = '🎉 Все слова изучены!';
-                document.getElementById('card-back').textContent = '🎉';
-                document.getElementById('current-card').textContent = '0';
-                document.getElementById('total-cards').textContent = '0';
-                return;
-            }
-            
-            const currentIndex = session.currentIndex;
-            const currentWord = session.sessionWords[currentIndex];
-            
-            if (!currentWord) {
-                console.error('Текущее слово не найдено');
-                return;
-            }
-            
-            const isReversed = appData.settings.reverse;
-            
-            document.getElementById('card-front').textContent = isReversed ? currentWord.rus : currentWord.eng;
-            document.getElementById('card-back').textContent = isReversed ? currentWord.eng : currentWord.rus;
-            
-            document.getElementById('flashcard').classList.remove('flipped');
-            
-            document.getElementById('current-card').textContent = currentIndex + 1;
-            document.getElementById('total-cards').textContent = totalWords;
-            document.getElementById('known-count').textContent = session.knownWords.size;
-            document.getElementById('unknown-count').textContent = session.unknownWords.size;
-            
-            const progress = ((currentIndex) / totalWords) * 100;
-            document.getElementById('progress-fill').style.width = `${progress}%`;
-        }
+       
 
         // Перемешивание
         function toggleShuffle() {
@@ -1761,99 +1648,8 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Сохранение прогресса изучения - ГЛАВНОЕ ИСПРАВЛЕНИЕ
-        function saveStudyProgress() {
-            if (!currentStudySession || !currentDeckId) return;
-            
-            const session = currentStudySession;
-            
-            // Сохраняем ВСЕ данные сессии
-            appData.studyProgress[currentDeckId] = {
-                currentIndex: session.currentIndex,
-                knownWords: Array.from(session.knownWords),
-                unknownWords: Array.from(session.unknownWords),
-                sessionWords: session.sessionWords.map(w => w.id), // Сохраняем ID слов
-                lastSaved: new Date().toISOString()
-            };
-            
-            saveData();
-        }
-
-        // Завершение сессии - ГЛАВНОЕ ИСПРАВЛЕНИЕ
-        function finishStudySession() {
-            if (!currentStudySession) return;
-            
-            const session = currentStudySession;
-            
-            if (session.isMultiDeck) {
-                // Для мультиколоды
-                if (session.unknownWords.size > 0) {
-                    // Есть неизученные слова - продолжаем с них
-                    const unknownIds = new Set(session.unknownWords);
-                    session.sessionWords = session.sessionWords.filter(word => unknownIds.has(word.id));
-                    session.currentIndex = 0;
-                    session.knownWords.clear();
-                    session.unknownWords.clear();
-                    
-                    saveStudyProgress();
-                    alert(`Осталось ${unknownIds.size} неизученных слов. Продолжаем с них.`);
-                    updateStudyUI();
-                } else {
-                    // Все слова изучены
-                    delete appData.studyProgress[currentDeckId];
-                    saveData();
-                    alert('🎉 Все слова изучены!');
-                    closeStudyModal();
-                }
-            } else {
-                // Для обычной колоды
-                const deck = appData.decks.find(d => d.id === session.deckId);
-                if (!deck) return;
-                
-                // Создаем итерацию
-                const iteration = {
-                    number: session.iterationNumber,
-                    date: new Date().toISOString(),
-                    totalWords: deck.words.length,
-                    knownWords: Array.from(session.knownWords),
-                    unknownWords: Array.from(session.unknownWords)
-                };
-                
-                deck.iterations.push(iteration);
-                deck.stats.totalStudied++;
-                deck.stats.lastStudied = new Date().toISOString();
-                
-                if (session.unknownWords.size > 0) {
-                    // Есть неизученные слова - создаем новую сессию только с ними
-                    const unknownIds = new Set(session.unknownWords);
-                    
-                    // Новая сессия с неизученными словами
-                    const newSessionWords = session.sessionWords.filter(word => unknownIds.has(word.id));
-                    
-                    // Сохраняем новую сессию для продолжения
-                    appData.studyProgress[session.deckId] = {
-                        currentIndex: 0,
-                        knownWords: [],
-                        unknownWords: Array.from(unknownIds),
-                        sessionWords: newSessionWords.map(w => w.id),
-                        lastSaved: new Date().toISOString()
-                    };
-                    
-                    saveData();
-                    alert(`Создана итерация ${iteration.number}. Осталось ${unknownIds.size} неизученных слов. Продолжайте их изучение.`);
-                    closeStudyModal();
-                } else {
-                    // Все слова изучены - удаляем прогресс и начинаем новую итерацию
-                    delete appData.studyProgress[session.deckId];
-                    saveData();
-                    alert(`🎉 Все слова изучены! Создана итерация ${iteration.number}.`);
-                    closeStudyModal();
-                }
-            }
-            
-            updateStats();
-        }
-
+        
+       
         // Закрытие окна изучения с сохранением прогресса
         function closeStudyModal() {
             if (currentStudySession) {
@@ -1870,43 +1666,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             updateStats();
         }
 
-        // Начать заново - сбрасываем прогресс и начинаем сначала
-        function restartSession() {
-            if (!currentStudySession) return;
-            
-            const session = currentStudySession;
-            
-            if (session.isMultiDeck) {
-                // Для мультиколоды перезагружаем из конфигурации
-                if (currentMultiDeckConfig) {
-                    createMultiDeckFromConfig(currentMultiDeckConfig);
-                }
-            } else {
-                // Для обычной колоды удаляем прогресс и начинаем сначала
-                const deck = appData.decks.find(d => d.id === session.deckId);
-                if (!deck) return;
-                
-                // Удаляем сохраненный прогресс
-                delete appData.studyProgress[session.deckId];
-                saveData();
-                
-                // Начинаем новую сессию со всеми словами
-                session.currentIndex = 0;
-                session.knownWords.clear();
-                session.unknownWords.clear();
-                session.sessionWords = [...deck.words];
-                session.iterationNumber = deck.iterations.length + 1;
-                
-                if (appData.settings.shuffle) {
-                    shuffleWords();
-                }
-                
-                cardHistory = [];
-                updatePrevButton();
-                updateStudyUI();
-                alert('Сессия начата заново со всеми словами.');
-            }
-        }
+       
 
         // Рендер выбора колод для мультиколоды
         function renderMultiDeckSelect() {
@@ -2047,7 +1807,257 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Создание мультиколоды из конфигурации
+         // Изучение колоды - ПРАВИЛЬНАЯ ЛОГИКА КАК В QUIZLET
+        function studyDeck(deckId) {
+            const deck = appData.decks.find(d => d.id === deckId);
+            if (!deck || deck.words.length === 0) {
+                alert('Колода пуста или не найдена');
+                return;
+            }
+            
+            currentDeckId = deckId;
+            cardHistory = [];
+            updatePrevButton();
+            
+            // Проверяем сохраненный прогресс
+            const savedProgress = appData.studyProgress[deckId];
+            let sessionWords = [];
+            let startIndex = 0;
+            let knownWords = new Set();
+            let unknownWords = new Set();
+            let iterationNumber = deck.iterations.length + 1;
+            
+            console.log('Начало изучения колоды:', deck.name);
+            console.log('Сохраненный прогресс:', savedProgress);
+            
+            if (savedProgress) {
+                // ВОССТАНАВЛИВАЕМ СОХРАНЕННУЮ СЕССИЮ
+                const wordMap = new Map(deck.words.map(w => [w.id, w]));
+                
+                // Восстанавливаем слова по ID
+                savedProgress.sessionWords.forEach(wordId => {
+                    if (wordMap.has(wordId)) {
+                        sessionWords.push(wordMap.get(wordId));
+                    }
+                });
+                
+                // Восстанавливаем состояние
+                startIndex = savedProgress.currentIndex || 0;
+                if (startIndex >= sessionWords.length) {
+                    startIndex = 0;
+                }
+                knownWords = new Set(savedProgress.knownWords || []);
+                unknownWords = new Set(savedProgress.unknownWords || []);
+                
+                console.log('Восстановлена сессия:', sessionWords.length, 'слов, позиция:', startIndex);
+            } else {
+                // НЕТ СОХРАНЕННОГО ПРОГРЕССА - НАЧИНАЕМ НОВУЮ СЕССИЮ
+                // Проверяем последнюю итерацию
+                if (deck.iterations.length > 0) {
+                    const lastIter = deck.iterations[deck.iterations.length - 1];
+                    // Берем только НЕИЗУЧЕННЫЕ слова из последней итерации
+                    if (lastIter.unknownWords && lastIter.unknownWords.length > 0) {
+                        const unknownIds = new Set(lastIter.unknownWords);
+                        sessionWords = deck.words.filter(w => unknownIds.has(w.id));
+                        console.log('Начинаем с неизученных слов из последней итерации:', sessionWords.length);
+                    } else {
+                        // Все слова изучены в последней итерации - начинаем новую итерацию со ВСЕХ слов
+                        sessionWords = [...deck.words];
+                        console.log('Все слова изучены, начинаем новую итерацию со всех слов');
+                    }
+                } else {
+                    // Нет итераций - начинаем со всех слов
+                    sessionWords = [...deck.words];
+                    console.log('Нет итераций, начинаем со всех слов');
+                }
+                
+                startIndex = 0;
+                knownWords = new Set();
+                unknownWords = new Set();
+            }
+            
+            // Инициализация сессии
+            currentStudySession = {
+                deckId: deckId,
+                currentIndex: startIndex,
+                knownWords: knownWords,
+                unknownWords: unknownWords,
+                sessionWords: sessionWords,
+                iterationNumber: iterationNumber,
+                isMultiDeck: false
+            };
+            
+            // Обновляем кнопки настроек
+            document.getElementById('shuffle-btn').classList.toggle('active', appData.settings.shuffle);
+            document.getElementById('reverse-btn').classList.toggle('active', appData.settings.reverse);
+            document.getElementById('save-current-multi-deck-btn').style.display = 'none';
+            
+            if (appData.settings.shuffle) {
+                shuffleWords();
+            }
+            
+            document.getElementById('study-title').textContent = deck.name;
+            showModal('study-modal');
+            updateStudyUI();
+            
+            setTimeout(() => {
+                const cardElement = document.getElementById('flashcard');
+                initSwipe(cardElement);
+            }, 100);
+        }
+
+        // Сохранение прогресса изучения - ПРАВИЛЬНО СОХРАНЯЕМ ПОЛНУЮ СЕССИЮ
+        function saveStudyProgress() {
+            if (!currentStudySession || !currentDeckId) return;
+            
+            const session = currentStudySession;
+            
+            // Сохраняем ВСЕ данные текущей сессии
+            appData.studyProgress[currentDeckId] = {
+                currentIndex: session.currentIndex,
+                knownWords: Array.from(session.knownWords),
+                unknownWords: Array.from(session.unknownWords),
+                sessionWords: session.sessionWords.map(w => w.id),
+                lastSaved: new Date().toISOString()
+            };
+            
+            saveData();
+        }
+
+        // Завершение сессии - ПРАВИЛЬНАЯ ЛОГИКА КАК В QUIZLET
+        function finishStudySession() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            
+            if (session.isMultiDeck) {
+                // Для мультиколоды
+                if (session.unknownWords.size > 0) {
+                    // Есть неизученные слова - продолжаем с них
+                    const unknownIds = new Set(session.unknownWords);
+                    session.sessionWords = session.sessionWords.filter(word => unknownIds.has(word.id));
+                    session.currentIndex = 0;
+                    session.knownWords.clear();
+                    session.unknownWords.clear();
+                    
+                    saveStudyProgress();
+                    alert(`Осталось ${unknownIds.size} неизученных слов. Продолжаем с них.`);
+                    updateStudyUI();
+                } else {
+                    // Все слова изучены
+                    delete appData.studyProgress[currentDeckId];
+                    saveData();
+                    alert('🎉 Все слова изучены!');
+                    closeStudyModal();
+                }
+            } else {
+                // Для обычной колоды - ПРАВИЛЬНАЯ ЛОГИКА КАК В QUIZLET
+                const deck = appData.decks.find(d => d.id === session.deckId);
+                if (!deck) return;
+                
+                // Создаем итерацию с текущими результатами
+                const iteration = {
+                    number: session.iterationNumber,
+                    date: new Date().toISOString(),
+                    totalWords: deck.words.length,
+                    knownWords: Array.from(session.knownWords),
+                    unknownWords: Array.from(session.unknownWords)
+                };
+                
+                deck.iterations.push(iteration);
+                deck.stats.totalStudied++;
+                deck.stats.lastStudied = new Date().toISOString();
+                
+                if (session.unknownWords.size > 0) {
+                    // Есть неизученные слова - создаем НОВУЮ СЕССИЮ ТОЛЬКО С НЕИЗУЧЕННЫМИ
+                    const unknownIds = new Set(session.unknownWords);
+                    const newSessionWords = deck.words.filter(word => unknownIds.has(word.id));
+                    
+                    // Сохраняем НОВУЮ сессию с неизученными словами
+                    appData.studyProgress[session.deckId] = {
+                        currentIndex: 0,
+                        knownWords: [],
+                        unknownWords: [],
+                        sessionWords: newSessionWords.map(w => w.id),
+                        lastSaved: new Date().toISOString()
+                    };
+                    
+                    saveData();
+                    
+                    // Обновляем текущую сессию для продолжения
+                    session.sessionWords = newSessionWords;
+                    session.currentIndex = 0;
+                    session.knownWords.clear();
+                    session.unknownWords.clear();
+                    session.iterationNumber = iteration.number + 1;
+                    
+                    // Уведомляем пользователя
+                    alert(`✅ Итерация ${iteration.number} завершена!\n✅ Изучено: ${iteration.knownWords.length}\n❌ Осталось неизученных: ${iteration.unknownWords.length}\n\nПродолжаем с неизученных слов.`);
+                    
+                    updateStudyUI();
+                } else {
+                    // ВСЕ слова изучены в этой итерации
+                    delete appData.studyProgress[session.deckId];
+                    saveData();
+                    
+                    // Определяем, показывать ли все слова или только неизученные из прошлых итераций
+                    let totalUnknown = 0;
+                    deck.iterations.forEach(iter => {
+                        totalUnknown += iter.unknownWords ? iter.unknownWords.length : 0;
+                    });
+                    
+                    if (totalUnknown > 0) {
+                        alert(`🎉 Отлично! Вы изучили все слова в этой итерации!\n\nВсего итераций: ${deck.iterations.length}\n\nПри следующем запуске начнется повторение слов, которые вы ранее не знали.`);
+                    } else {
+                        alert(`🎉 Превосходно! Вы изучили ВСЕ слова в колоде!\n\nВсе слова освоены. При следующем запуске начнется новая итерация со всеми словами.`);
+                    }
+                    
+                    closeStudyModal();
+                }
+            }
+            
+            updateStats();
+        }
+
+        // Начать заново - СО ВСЕМИ СЛОВАМИ
+        function restartSession() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            
+            if (session.isMultiDeck) {
+                // Для мультиколоды перезагружаем из конфигурации
+                if (currentMultiDeckConfig) {
+                    createMultiDeckFromConfig(currentMultiDeckConfig);
+                }
+            } else {
+                // Для обычной колоды - начинаем с ВСЕХ слов
+                const deck = appData.decks.find(d => d.id === session.deckId);
+                if (!deck) return;
+                
+                // Удаляем сохраненный прогресс
+                delete appData.studyProgress[session.deckId];
+                saveData();
+                
+                // Начинаем с ВСЕХ слов
+                session.currentIndex = 0;
+                session.knownWords.clear();
+                session.unknownWords.clear();
+                session.sessionWords = [...deck.words];
+                session.iterationNumber = deck.iterations.length + 1;
+                
+                if (appData.settings.shuffle) {
+                    shuffleWords();
+                }
+                
+                cardHistory = [];
+                updatePrevButton();
+                updateStudyUI();
+                alert('Сессия начата заново со всеми словами колоды.');
+            }
+        }
+
+        // Создание мультиколоды из конфигурации - с правильной логикой для режима "unknown"
         function createMultiDeckFromConfig(config) {
             let allWords = [];
             let totalWords = 0;
@@ -2059,23 +2069,35 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 let wordsToAdd = [];
                 
                 if (config.mode === 'all') {
+                    // Все слова из колоды
                     wordsToAdd = deck.words.map(w => ({
                         ...w,
                         deckId: deck.id,
                         id: `multi-${w.id}-${Date.now()}`
                     }));
                 } else if (config.mode === 'unknown') {
-                    const lastIter = deck.iterations.length > 0 ? deck.iterations[deck.iterations.length - 1] : null;
-                    if (lastIter && lastIter.unknownWords && lastIter.unknownWords.length > 0) {
-                        const unknownIds = new Set(lastIter.unknownWords);
-                        wordsToAdd = deck.words
-                            .filter(w => unknownIds.has(w.id))
-                            .map(w => ({
+                    // Только НЕИЗУЧЕННЫЕ слова из последней итерации
+                    if (deck.iterations.length > 0) {
+                        const lastIter = deck.iterations[deck.iterations.length - 1];
+                        if (lastIter.unknownWords && lastIter.unknownWords.length > 0) {
+                            const unknownIds = new Set(lastIter.unknownWords);
+                            wordsToAdd = deck.words
+                                .filter(w => unknownIds.has(w.id))
+                                .map(w => ({
+                                    ...w,
+                                    deckId: deck.id,
+                                    id: `multi-${w.id}-${Date.now()}`
+                                }));
+                        } else {
+                            // Если все слова изучены, берем все слова для повторения
+                            wordsToAdd = deck.words.map(w => ({
                                 ...w,
                                 deckId: deck.id,
                                 id: `multi-${w.id}-${Date.now()}`
                             }));
+                        }
                     } else {
+                        // Нет итераций - берем все слова
                         wordsToAdd = deck.words.map(w => ({
                             ...w,
                             deckId: deck.id,
@@ -2120,7 +2142,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 knownWords: new Set(),
                 unknownWords: new Set(),
                 sessionWords: allWords,
-                originalWordsCount: totalWords,
                 iterationNumber: 1,
                 isMultiDeck: true
             };
@@ -2142,6 +2163,49 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 const cardElement = document.getElementById('flashcard');
                 initSwipe(cardElement);
             }, 100);
+        }
+
+        // Обновление UI изучения - показываем правильные числа
+        function updateStudyUI() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            const totalWords = session.sessionWords.length;
+            
+            if (totalWords === 0) {
+                document.getElementById('card-front').textContent = '🎉 Все слова изучены!';
+                document.getElementById('card-back').textContent = '🎉';
+                document.getElementById('current-card').textContent = '0';
+                document.getElementById('total-cards').textContent = '0';
+                document.getElementById('known-count').textContent = '0';
+                document.getElementById('unknown-count').textContent = '0';
+                document.getElementById('progress-fill').style.width = '100%';
+                return;
+            }
+            
+            const currentIndex = session.currentIndex;
+            const currentWord = session.sessionWords[currentIndex];
+            
+            if (!currentWord) {
+                console.error('Текущее слово не найдено');
+                return;
+            }
+            
+            const isReversed = appData.settings.reverse;
+            
+            document.getElementById('card-front').textContent = isReversed ? currentWord.rus : currentWord.eng;
+            document.getElementById('card-back').textContent = isReversed ? currentWord.eng : currentWord.rus;
+            
+            document.getElementById('flashcard').classList.remove('flipped');
+            
+            // Обновление прогресса
+            document.getElementById('current-card').textContent = currentIndex + 1;
+            document.getElementById('total-cards').textContent = totalWords;
+            document.getElementById('known-count').textContent = session.knownWords.size;
+            document.getElementById('unknown-count').textContent = session.unknownWords.size;
+            
+            const progress = ((currentIndex) / totalWords) * 100;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
         }
 
         // Начать мультиколоду
