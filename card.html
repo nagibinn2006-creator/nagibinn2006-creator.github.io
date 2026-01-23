@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карточки для изучения слов</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .app {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .container {
+            display: flex;
+            min-height: 600px;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #f8fafc;
+            border-right: 1px solid #e2e8f0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 25px;
+            background: white;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: #f1f5f9;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: #4f46e5;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-top: 8px;
+        }
+
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #4338ca;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .tree-view {
+            list-style: none;
+            padding-left: 20px;
+        }
+
+        .tree-item {
+            padding: 12px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tree-item:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+
+        .folder {
+            color: #7c3aed;
+            font-weight: bold;
+        }
+
+        .deck {
+            color: #0f766e;
+        }
+
+        .card {
+            perspective: 1000px;
+            width: 100%;
+            max-width: 500px;
+            height: 300px;
+            margin: 30px auto;
+        }
+
+        .card-inner {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 600;
+            padding: 40px;
+            text-align: center;
+            border-radius: 15px;
+        }
+
+        .card-front {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            transform: rotateY(180deg);
+        }
+
+        .progress-info {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            transition: width 0.5s;
+        }
+
+        .swipe-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .swipe-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .swipe-left {
+            background: #ef4444;
+        }
+
+        .swipe-right {
+            background: #10b981;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 25px 0;
+        }
+
+        .stat-card {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4f46e5;
+            margin: 10px 0;
+        }
+
+        .iteration-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+
+        .iteration-btn {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .iteration-btn.active {
+            background: #4f46e5;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close-modal {
+            float: right;
+            cursor: pointer;
+            font-size: 24px;
+        }
+
+        .flashcard-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .deck-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .deck-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>📚 Умные Карточки</h1>
+            <p>Изучайте слова с расширенной статистикой</p>
+        </header>
+
+        <div class="container">
+            <div class="sidebar">
+                <div class="tab-buttons">
+                    <button class="tab-btn active" data-tab="folders">📁 Папки</button>
+                    <button class="tab-btn" data-tab="decks">🃏 Колоды</button>
+                    <button class="tab-btn" data-tab="multi">🎯 Мультиколода</button>
+                    <button class="tab-btn" data-tab="stats">📊 Статистика</button>
+                </div>
+
+                <div id="folders-tab" class="tab-content active">
+                    <button onclick="showCreateFolderModal()" class="btn-success">+ Новая папка</button>
+                    <ul id="folders-tree" class="tree-view"></ul>
+                </div>
+
+                <div id="decks-tab" class="tab-content">
+                    <button onclick="showCreateDeckModal()" class="btn-success">+ Новая колода</button>
+                    <div id="decks-list"></div>
+                </div>
+
+                <div id="multi-tab" class="tab-content">
+                    <h3>Выберите колоды для изучения:</h3>
+                    <div id="multi-decks-select"></div>
+                    <div class="form-group">
+                        <label>Режим отбора слов:</label>
+                        <select id="multi-mode">
+                            <option value="all">Все слова из колод</option>
+                            <option value="unknown">Только неизученные слова</option>
+                            <option value="iteration">Из конкретных итераций</option>
+                        </select>
+                    </div>
+                    <div id="iteration-selectors" style="display: none;"></div>
+                    <button onclick="startMultiDeck()" class="btn-success">Начать изучение</button>
+                </div>
+
+                <div id="stats-tab" class="tab-content">
+                    <h3>Общая статистика</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div>Всего слов</div>
+                            <div class="stat-number" id="total-words">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div>Изучено</div>
+                            <div class="stat-number" id="learned-words">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div>Колод</div>
+                            <div class="stat-number" id="total-decks">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div>Папок</div>
+                            <div class="stat-number" id="total-folders">0</div>
+                        </div>
+                    </div>
+                    <div id="deck-stats"></div>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div id="main-content">
+                    <h2>Добро пожаловать!</h2>
+                    <p>Создайте свою первую колоду карточек или выберите существующую для изучения.</p>
+                    <div class="progress-info">
+                        <h3>📈 Ваш прогресс</h3>
+                        <p>Здесь будет отображаться статистика по вашим колодам.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальные окна -->
+    <div id="create-folder-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('create-folder-modal')">×</span>
+            <h3>Создать папку</h3>
+            <input type="text" id="folder-name" placeholder="Название папки">
+            <button onclick="createFolder()" class="btn-success">Создать</button>
+        </div>
+    </div>
+
+    <div id="create-deck-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('create-deck-modal')">×</span>
+            <h3>Создать колоду</h3>
+            <div class="form-group">
+                <input type="text" id="deck-name" placeholder="Название колоды">
+            </div>
+            <div class="form-group">
+                <textarea id="deck-words" placeholder="Введите слова в формате:
+английское слово - перевод
+apple - яблоко
+cat - кот
+..." rows="10" style="width: 100%; padding: 10px;"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Папка:</label>
+                <select id="deck-folder">
+                    <option value="">Без папки</option>
+                </select>
+            </div>
+            <button onclick="createDeck()" class="btn-success">Создать колоду</button>
+        </div>
+    </div>
+
+    <div id="add-words-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('add-words-modal')">×</span>
+            <h3>Добавить слова</h3>
+            <textarea id="new-words" placeholder="Введите слова в формате:
+английское слово - перевод
+apple - яблоко
+cat - кот
+..." rows="8" style="width: 100%; padding: 10px;"></textarea>
+            <button onclick="addWordsToDeck()" class="btn-success">Добавить</button>
+        </div>
+    </div>
+
+    <div id="study-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('study-modal')">×</span>
+            <h3 id="study-title">Изучение</h3>
+            
+            <div class="flashcard-controls">
+                <label>
+                    <input type="checkbox" id="shuffle-cards"> Перемешивать
+                </label>
+                <label>
+                    <input type="checkbox" id="reverse-cards"> Обратная сторона
+                </label>
+                <button onclick="restartDeck()" class="btn-danger">Начать заново</button>
+            </div>
+
+            <div class="progress-info">
+                <div>Прогресс: <span id="current-card">0</span>/<span id="total-cards">0</span></div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div>Знаю: <span id="known-count">0</span> | Не знаю: <span id="unknown-count">0</span></div>
+            </div>
+
+            <div class="card" id="flashcard" onclick="flipCard()">
+                <div class="card-inner">
+                    <div class="card-front" id="card-front"></div>
+                    <div class="card-back" id="card-back"></div>
+                </div>
+            </div>
+
+            <div class="swipe-buttons">
+                <div class="swipe-btn swipe-left" onclick="markUnknown()">
+                    ❌ Не знаю
+                </div>
+                <div class="swipe-btn swipe-right" onclick="markKnown()">
+                    ✅ Знаю
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Хранилище данных
+        let appData = {
+            decks: [],
+            folders: [],
+            currentDeck: null,
+            currentMultiDeck: null,
+            studySession: null
+        };
+
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            initTabs();
+            renderFoldersTree();
+            renderDecksList();
+            updateStats();
+        });
+
+        // Загрузка данных из localStorage
+        function loadData() {
+            const saved = localStorage.getItem('flashcardAppData');
+            if (saved) {
+                appData = JSON.parse(saved);
+            }
+        }
+
+        // Сохранение данных в localStorage
+        function saveData() {
+            localStorage.setItem('flashcardAppData', JSON.stringify(appData));
+        }
+
+        // Инициализация вкладок
+        function initTabs() {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tabId = btn.dataset.tab;
+                    
+                    // Обновляем активные кнопки
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    // Обновляем активные вкладки
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
+            });
+        }
+
+        // Показ модального окна
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        // Закрытие модального окна
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Создание папки
+        function showCreateFolderModal() {
+            showModal('create-folder-modal');
+        }
+
+        function createFolder() {
+            const name = document.getElementById('folder-name').value.trim();
+            if (!name) return alert('Введите название папки');
+
+            const folder = {
+                id: Date.now(),
+                name: name,
+                decks: []
+            };
+
+            appData.folders.push(folder);
+            saveData();
+            closeModal('create-folder-modal');
+            document.getElementById('folder-name').value = '';
+            renderFoldersTree();
+            updateStats();
+        }
+
+        // Создание колоды
+        function showCreateDeckModal() {
+            const folderSelect = document.getElementById('deck-folder');
+            folderSelect.innerHTML = '<option value="">Без папки</option>';
+            appData.folders.forEach(folder => {
+                folderSelect.innerHTML += `<option value="${folder.id}">${folder.name}</option>`;
+            });
+            showModal('create-deck-modal');
+        }
+
+        function createDeck() {
+            const name = document.getElementById('deck-name').value.trim();
+            const wordsText = document.getElementById('deck-words').value.trim();
+            const folderId = document.getElementById('deck-folder').value;
+
+            if (!name) return alert('Введите название колоды');
+            if (!wordsText) return alert('Введите слова');
+
+            const words = parseWords(wordsText);
+            if (words.length === 0) return alert('Нет корректных слов в формате "слово - перевод"');
+
+            const deck = {
+                id: Date.now(),
+                name: name,
+                words: words,
+                folderId: folderId || null,
+                createdAt: new Date().toISOString(),
+                iterations: []
+            };
+
+            appData.decks.push(deck);
+            
+            // Добавляем в папку если выбрана
+            if (folderId) {
+                const folder = appData.folders.find(f => f.id == folderId);
+                if (folder) {
+                    folder.decks.push(deck.id);
+                }
+            }
+
+            saveData();
+            closeModal('create-deck-modal');
+            document.getElementById('deck-name').value = '';
+            document.getElementById('deck-words').value = '';
+            renderFoldersTree();
+            renderDecksList();
+            updateStats();
+        }
+
+        // Парсинг слов из текста
+        function parseWords(text) {
+            const lines = text.split('\n');
+            const words = [];
+            let index = 0;
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (!line) return;
+
+                const parts = line.split('-').map(p => p.trim());
+                if (parts.length >= 2) {
+                    const [eng, ...rusParts] = parts;
+                    const rus = rusParts.join('-');
+                    words.push({
+                        eng: eng,
+                        rus: rus,
+                        index: index++
+                    });
+                }
+            });
+
+            return words;
+        }
+
+        // Рендер дерева папок
+        function renderFoldersTree() {
+            const tree = document.getElementById('folders-tree');
+            tree.innerHTML = '';
+
+            // Показываем колоды без папок
+            const rootDecks = appData.decks.filter(d => !d.folderId);
+            if (rootDecks.length > 0) {
+                const rootItem = document.createElement('li');
+                rootItem.innerHTML = '<strong>Колоды без папки:</strong>';
+                tree.appendChild(rootItem);
+
+                const subList = document.createElement('ul');
+                rootDecks.forEach(deck => {
+                    const deckItem = document.createElement('li');
+                    deckItem.className = 'tree-item deck';
+                    deckItem.innerHTML = `
+                        <span onclick="studyDeck(${deck.id})">${deck.name} (${deck.words.length})</span>
+                        <div class="deck-actions">
+                            <button onclick="addWordsToDeckModal(${deck.id})" class="action-btn">+</button>
+                            <button onclick="deleteDeck(${deck.id})" class="action-btn btn-danger">×</button>
+                        </div>
+                    `;
+                    subList.appendChild(deckItem);
+                });
+                tree.appendChild(subList);
+            }
+
+            // Показываем папки
+            appData.folders.forEach(folder => {
+                const folderItem = document.createElement('li');
+                folderItem.className = 'tree-item folder';
+                folderItem.innerHTML = `
+                    <span>📁 ${folder.name}</span>
+                    <button onclick="deleteFolder(${folder.id})" class="btn-danger">×</button>
+                `;
+                tree.appendChild(folderItem);
+
+                const subList = document.createElement('ul');
+                const folderDecks = appData.decks.filter(d => d.folderId == folder.id);
+                
+                folderDecks.forEach(deck => {
+                    const deckItem = document.createElement('li');
+                    deckItem.className = 'tree-item deck';
+                    deckItem.innerHTML = `
+                        <span onclick="studyDeck(${deck.id})">${deck.name} (${deck.words.length})</span>
+                        <div class="deck-actions">
+                            <button onclick="addWordsToDeckModal(${deck.id})" class="action-btn">+</button>
+                            <button onclick="deleteDeck(${deck.id})" class="action-btn btn-danger">×</button>
+                        </div>
+                    `;
+                    subList.appendChild(deckItem);
+                });
+
+                if (folderDecks.length > 0) {
+                    tree.appendChild(subList);
+                }
+            });
+        }
+
+        // Рендер списка колод
+        function renderDecksList() {
+            const list = document.getElementById('decks-list');
+            list.innerHTML = '';
+
+            appData.decks.forEach(deck => {
+                const folder = deck.folderId ? appData.folders.find(f => f.id == deck.folderId) : null;
+                const iterations = deck.iterations || [];
+                
+                const deckEl = document.createElement('div');
+                deckEl.className = 'deck-list-item';
+                deckEl.innerHTML = `
+                    <div>
+                        <strong>${deck.name}</strong>
+                        <div style="font-size: 0.9em; color: #666;">
+                            ${deck.words.length} слов
+                            ${folder ? ` | Папка: ${folder.name}` : ''}
+                            ${iterations.length > 0 ? ` | Итераций: ${iterations.length}` : ''}
+                        </div>
+                    </div>
+                    <div class="deck-actions">
+                        <button onclick="studyDeck(${deck.id})" class="action-btn btn-success">Учить</button>
+                        <button onclick="addWordsToDeckModal(${deck.id})" class="action-btn">+ Слова</button>
+                        <button onclick="deleteDeck(${deck.id})" class="action-btn btn-danger">×</button>
+                    </div>
+                `;
+                list.appendChild(deckEl);
+            });
+        }
+
+        // Добавление слов в колоду
+        function addWordsToDeckModal(deckId) {
+            appData.currentDeck = appData.decks.find(d => d.id == deckId);
+            showModal('add-words-modal');
+        }
+
+        function addWordsToDeck() {
+            if (!appData.currentDeck) return;
+            
+            const text = document.getElementById('new-words').value.trim();
+            if (!text) return alert('Введите слова');
+
+            const newWords = parseWords(text);
+            const existingEngWords = new Set(appData.currentDeck.words.map(w => w.eng.toLowerCase()));
+
+            let addedCount = 0;
+            newWords.forEach(word => {
+                if (!existingEngWords.has(word.eng.toLowerCase())) {
+                    word.index = appData.currentDeck.words.length;
+                    appData.currentDeck.words.push(word);
+                    existingEngWords.add(word.eng.toLowerCase());
+                    addedCount++;
+                }
+            });
+
+            saveData();
+            closeModal('add-words-modal');
+            document.getElementById('new-words').value = '';
+            alert(`Добавлено ${addedCount} новых слов`);
+            renderFoldersTree();
+            renderDecksList();
+            updateStats();
+        }
+
+        // Удаление колоды
+        function deleteDeck(deckId) {
+            if (!confirm('Удалить колоду?')) return;
+
+            appData.decks = appData.decks.filter(d => d.id !== deckId);
+            
+            // Удаляем из папок
+            appData.folders.forEach(folder => {
+                folder.decks = folder.decks.filter(id => id !== deckId);
+            });
+
+            saveData();
+            renderFoldersTree();
+            renderDecksList();
+            updateStats();
+        }
+
+        // Удаление папки
+        function deleteFolder(folderId) {
+            const folder = appData.folders.find(f => f.id == folderId);
+            if (folder.decks.length > 0) {
+                if (!confirm('В папке есть колоды. Удалить папку и все колоды внутри?')) return;
+                
+                // Удаляем все колоды в папке
+                appData.decks = appData.decks.filter(d => d.folderId !== folderId);
+            }
+            
+            appData.folders = appData.folders.filter(f => f.id !== folderId);
+            saveData();
+            renderFoldersTree();
+            updateStats();
+        }
+
+        // Изучение колоды
+        function studyDeck(deckId) {
+            appData.currentDeck = appData.decks.find(d => d.id == deckId);
+            
+            // Создаем сессию изучения
+            appData.studySession = {
+                deckId: deckId,
+                currentIndex: 0,
+                knownWords: new Set(),
+                unknownWords: new Set(),
+                currentIteration: (appData.currentDeck.iterations?.length || 0) + 1,
+                isMultiDeck: false
+            };
+
+            document.getElementById('study-title').textContent = `Изучение: ${appData.currentDeck.name}`;
+            showModal('study-modal');
+            updateStudyUI();
+        }
+
+        // Обновление UI изучения
+        function updateStudyUI() {
+            if (!appData.studySession || !appData.currentDeck) return;
+
+            const session = appData.studySession;
+            const words = appData.currentDeck.words;
+            
+            if (words.length === 0) {
+                document.getElementById('card-front').textContent = 'Нет слов в колоде';
+                document.getElementById('card-back').textContent = 'Добавьте слова';
+                return;
+            }
+
+            // Применяем перемешивание если нужно
+            if (document.getElementById('shuffle-cards').checked && !session.shuffled) {
+                shuffleArray(words);
+                session.shuffled = true;
+            }
+
+            const currentWord = words[session.currentIndex];
+            const showReverse = document.getElementById('reverse-cards').checked;
+
+            document.getElementById('card-front').textContent = showReverse ? currentWord.rus : currentWord.eng;
+            document.getElementById('card-back').textContent = showReverse ? currentWord.eng : currentWord.rus;
+            
+            document.getElementById('flashcard').classList.remove('flipped');
+            
+            // Обновляем прогресс
+            document.getElementById('current-card').textContent = session.currentIndex + 1;
+            document.getElementById('total-cards').textContent = words.length;
+            document.getElementById('known-count').textContent = session.knownWords.size;
+            document.getElementById('unknown-count').textContent = session.unknownWords.size;
+            
+            const progress = ((session.currentIndex) / words.length) * 100;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
+        }
+
+        // Перемешивание массива
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // Переворот карточки
+        function flipCard() {
+            document.getElementById('flashcard').classList.toggle('flipped');
+        }
+
+        // Отметить как знаю
+        function markKnown() {
+            if (!appData.studySession) return;
+            
+            const session = appData.studySession;
+            const currentWord = appData.currentDeck.words[session.currentIndex];
+            
+            session.knownWords.add(currentWord.index);
+            session.unknownWords.delete(currentWord.index);
+            
+            nextCard();
+        }
+
+        // Отметить как не знаю
+        function markUnknown() {
+            if (!appData.studySession) return;
+            
+            const session = appData.studySession;
+            const currentWord = appData.currentDeck.words[session.currentIndex];
+            
+            session.unknownWords.add(currentWord.index);
+            session.knownWords.delete(currentWord.index);
+            
+            nextCard();
+        }
+
+        // Следующая карточка
+        function nextCard() {
+            if (!appData.studySession) return;
+            
+            const session = appData.studySession;
+            const words = appData.currentDeck.words;
+            
+            session.currentIndex++;
+            
+            if (session.currentIndex >= words.length) {
+                finishStudySession();
+            } else {
+                updateStudyUI();
+            }
+        }
+
+        // Завершение сессии изучения
+        function finishStudySession() {
+            if (!appData.studySession || !appData.currentDeck) return;
+            
+            const session = appData.studySession;
+            const deck = appData.currentDeck;
+            
+            // Сохраняем итерацию
+            const iteration = {
+                number: session.currentIteration,
+                date: new Date().toISOString(),
+                totalWords: deck.words.length,
+                knownWords: Array.from(session.knownWords),
+                unknownWords: Array.from(session.unknownWords)
+            };
+            
+            if (!deck.iterations) deck.iterations = [];
+            deck.iterations.push(iteration);
+            
+            saveData();
+            
+            alert(`Сессия завершена!\nЗнаете: ${session.knownWords.size}\nНе знаете: ${session.unknownWords.size}`);
+            
+            if (session.isMultiDeck) {
+                closeModal('study-modal');
+                updateStats();
+            } else {
+                // Показываем только неизученные слова
+                appData.studySession.currentIndex = 0;
+                appData.studySession.shuffled = false;
+                appData.currentDeck.words = deck.words.filter((_, idx) => 
+                    session.unknownWords.has(idx)
+                );
+                
+                if (appData.currentDeck.words.length === 0) {
+                    alert('Все слова изучены!');
+                    closeModal('study-modal');
+                } else {
+                    updateStudyUI();
+                }
+            }
+            
+            updateStats();
+        }
+
+        // Начать заново
+        function restartDeck() {
+            if (!appData.studySession) return;
+            
+            appData.studySession.currentIndex = 0;
+            appData.studySession.knownWords.clear();
+            appData.studySession.unknownWords.clear();
+            appData.studySession.shuffled = false;
+            
+            // Восстанавливаем оригинальный порядок слов
+            if (appData.currentDeck && appData.studySession.deckId) {
+                const originalDeck = appData.decks.find(d => d.id == appData.studySession.deckId);
+                if (originalDeck) {
+                    appData.currentDeck.words = [...originalDeck.words];
+                }
+            }
+            
+            updateStudyUI();
+        }
+
+        // Мультиколода
+        function renderMultiDeckSelect() {
+            const container = document.getElementById('multi-decks-select');
+            container.innerHTML = '';
+            
+            appData.decks.forEach(deck => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label>
+                        <input type="checkbox" value="${deck.id}" data-deck="${deck.id}">
+                        ${deck.name} (${deck.words.length} слов, итераций: ${deck.iterations?.length || 0})
+                    </label>
+                `;
+                container.appendChild(div);
+            });
+            
+            // Обновляем выбор режима
+            document.getElementById('multi-mode').addEventListener('change', (e) => {
+                const iterationSelectors = document.getElementById('iteration-selectors');
+                iterationSelectors.style.display = e.target.value === 'iteration' ? 'block' : 'none';
+                if (e.target.value === 'iteration') {
+                    renderIterationSelectors();
+                }
+            });
+        }
+
+        function renderIterationSelectors() {
+            const container = document.getElementById('iteration-selectors');
+            container.innerHTML = '<h4>Выберите итерации для каждой колоды:</h4>';
+            
+            appData.decks.forEach(deck => {
+                if (deck.iterations && deck.iterations.length > 0) {
+                    const div = document.createElement('div');
+                    div.innerHTML = `
+                        <div><strong>${deck.name}:</strong></div>
+                        <div class="iteration-selector" id="iterations-${deck.id}"></div>
+                    `;
+                    container.appendChild(div);
+                    
+                    const selector = document.getElementById(`iterations-${deck.id}`);
+                    deck.iterations.forEach(iter => {
+                        const btn = document.createElement('div');
+                        btn.className = 'iteration-btn';
+                        btn.textContent = `Итерация ${iter.number}`;
+                        btn.dataset.deckId = deck.id;
+                        btn.dataset.iterNum = iter.number;
+                        btn.onclick = function() {
+                            document.querySelectorAll(`#iterations-${deck.id} .iteration-btn`).forEach(b => 
+                                b.classList.remove('active')
+                            );
+                            this.classList.add('active');
+                        };
+                        selector.appendChild(btn);
+                    });
+                }
+            });
+        }
+
+        function startMultiDeck() {
+            const selectedDeckIds = Array.from(
+                document.querySelectorAll('#multi-decks-select input:checked')
+            ).map(input => parseInt(input.value));
+            
+            if (selectedDeckIds.length === 0) {
+                return alert('Выберите хотя бы одну колоду');
+            }
+            
+            const mode = document.getElementById('multi-mode').value;
+            let allWords = [];
+            
+            selectedDeckIds.forEach(deckId => {
+                const deck = appData.decks.find(d => d.id == deckId);
+                if (!deck) return;
+                
+                let wordsToAdd = [];
+                
+                if (mode === 'all') {
+                    wordsToAdd = deck.words.map(w => ({...w, deckId: deck.id}));
+                } else if (mode === 'unknown') {
+                    // Берем слова из последней итерации которые не знал
+                    if (deck.iterations && deck.iterations.length > 0) {
+                        const lastIter = deck.iterations[deck.iterations.length - 1];
+                        wordsToAdd = deck.words
+                            .filter((_, idx) => lastIter.unknownWords.includes(idx))
+                            .map(w => ({...w, deckId: deck.id}));
+                    } else {
+                        wordsToAdd = deck.words.map(w => ({...w, deckId: deck.id}));
+                    }
+                } else if (mode === 'iteration') {
+                    // Берем слова из выбранной итерации
+                    const iterBtn = document.querySelector(`#iterations-${deckId} .iteration-btn.active`);
+                    if (iterBtn) {
+                        const iterNum = parseInt(iterBtn.dataset.iterNum);
+                        const iteration = deck.iterations.find(iter => iter.number === iterNum);
+                        if (iteration) {
+                            wordsToAdd = deck.words
+                                .filter((_, idx) => iteration.unknownWords.includes(idx))
+                                .map(w => ({...w, deckId: deck.id}));
+                        }
+                    } else {
+                        alert(`Для колоды "${deck.name}" не выбрана итерация`);
+                        return;
+                    }
+                }
+                
+                allWords = [...allWords, ...wordsToAdd];
+            });
+            
+            if (allWords.length === 0) {
+                return alert('Нет слов для изучения');
+            }
+            
+            // Создаем виртуальную колоду для изучения
+            appData.currentDeck = {
+                id: 'multi-' + Date.now(),
+                name: 'Мультиколода',
+                words: allWords
+            };
+            
+            appData.studySession = {
+                deckId: 'multi',
+                currentIndex: 0,
+                knownWords: new Set(),
+                unknownWords: new Set(),
+                currentIteration: 1,
+                isMultiDeck: true
+            };
+            
+            document.getElementById('study-title').textContent = 'Мультиколода';
+            showModal('study-modal');
+            updateStudyUI();
+        }
+
+        // Обновление статистики
+        function updateStats() {
+            let totalWords = 0;
+            let learnedWords = 0;
+            let totalKnown = 0;
+            let totalUnknown = 0;
+            
+            appData.decks.forEach(deck => {
+                totalWords += deck.words.length;
+                
+                if (deck.iterations && deck.iterations.length > 0) {
+                    const lastIter = deck.iterations[deck.iterations.length - 1];
+                    totalKnown += lastIter.knownWords.length;
+                    totalUnknown += lastIter.unknownWords.length;
+                }
+            });
+            
+            learnedWords = totalKnown;
+            
+            document.getElementById('total-words').textContent = totalWords;
+            document.getElementById('learned-words').textContent = learnedWords;
+            document.getElementById('total-decks').textContent = appData.decks.length;
+            document.getElementById('total-folders').textContent = appData.folders.length;
+            
+            // Обновляем статистику по колодам
+            const deckStats = document.getElementById('deck-stats');
+            deckStats.innerHTML = '<h4>Статистика по колодам:</h4>';
+            
+            appData.decks.forEach(deck => {
+                const lastIter = deck.iterations && deck.iterations.length > 0 
+                    ? deck.iterations[deck.iterations.length - 1]
+                    : null;
+                
+                const statEl = document.createElement('div');
+                statEl.className = 'deck-list-item';
+                statEl.innerHTML = `
+                    <div>
+                        <strong>${deck.name}</strong>
+                        <div style="font-size: 0.9em; color: #666;">
+                            Слов: ${deck.words.length} | 
+                            Итераций: ${deck.iterations?.length || 0}
+                            ${lastIter ? ` | Знает: ${lastIter.knownWords.length}/${deck.words.length}` : ''}
+                        </div>
+                    </div>
+                    <button onclick="studyDeck(${deck.id})" class="action-btn">Учить</button>
+                `;
+                deckStats.appendChild(statEl);
+            });
+            
+            // Обновляем выбор для мультиколоды
+            if (document.getElementById('multi-decks-select')) {
+                renderMultiDeckSelect();
+            }
+        }
+
+        // Инициализация обновлений UI
+        document.getElementById('shuffle-cards').addEventListener('change', updateStudyUI);
+        document.getElementById('reverse-cards').addEventListener('change', updateStudyUI);
+
+        // Экспорт данных (для резервного копирования)
+        function exportData() {
+            const dataStr = JSON.stringify(appData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportFileDefaultName = 'flashcards-backup.json';
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        // Импорт данных
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = event => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        appData = importedData;
+                        saveData();
+                        loadData();
+                        renderFoldersTree();
+                        renderDecksList();
+                        updateStats();
+                        alert('Данные успешно импортированы!');
+                    } catch (err) {
+                        alert('Ошибка при импорте данных');
+                    }
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+
+        // Добавляем кнопки экспорта/импорта в UI
+        document.addEventListener('DOMContentLoaded', () => {
+            const header = document.querySelector('header');
+            const exportBtn = document.createElement('button');
+            exportBtn.textContent = '📤 Экспорт';
+            exportBtn.style.marginRight = '10px';
+            exportBtn.onclick = exportData;
+            
+            const importBtn = document.createElement('button');
+            importBtn.textContent = '📥 Импорт';
+            importBtn.onclick = importData;
+            
+            header.appendChild(exportBtn);
+            header.appendChild(importBtn);
+        });
+    </script>
+</body>
+</html>
