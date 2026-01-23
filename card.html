@@ -421,6 +421,11 @@
             transform: scale(0.95);
         }
         
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         /* Список колод с кнопками в одну строку */
         .deck-list-item {
             display: flex;
@@ -631,22 +636,6 @@
         .form-group {
             margin-bottom: 12px;
         }
-        
-        /* Анимации */
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        @keyframes swipeRight {
-            from { transform: translateX(0) rotate(0); }
-            to { transform: translateX(100px) rotate(10deg); }
-        }
-        
-        @keyframes swipeLeft {
-            from { transform: translateX(0) rotate(0); }
-            to { transform: translateX(-100px) rotate(-10deg); }
-        }
     </style>
 </head>
 <body>
@@ -786,7 +775,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 <button class="control-btn" id="shuffle-btn" onclick="toggleShuffle()" title="Перемешивать">🔀</button>
                 <button class="control-btn" id="reverse-btn" onclick="toggleReverse()" title="Обратная сторона">🔄</button>
                 <button class="control-btn" id="speech-btn" onclick="speakCurrentWord()" title="Произнести слово">🔊</button>
-                <button class="control-btn" id="prev-btn" onclick="goToPreviousCard()" title="Предыдущая карточка">◀️</button>
+                <button class="control-btn" id="prev-btn" onclick="goToPreviousCard()" title="Предыдущая карточка" disabled>◀️</button>
                 <button class="control-btn" onclick="restartSession()" title="Начать заново" style="background: #fee2e2; color: #ef4444;">🔄</button>
                 <button class="control-btn" onclick="saveCurrentMultiDeck()" id="save-current-multi-deck-btn" title="Сохранить как колоду" style="display: none;">💾</button>
             </div>
@@ -807,7 +796,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 <div class="swipe-indicator swipe-left-indicator">❌</div>
                 <div class="swipe-indicator swipe-right-indicator">✅</div>
                 
-                <div class="card" id="flashcard">
+                <div class="card" id="flashcard" onclick="flipCard()">
                     <div class="card-inner">
                         <div class="card-front" id="card-front">Загрузка...</div>
                         <div class="card-back" id="card-back">Загрузка...</div>
@@ -848,9 +837,9 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
         let swipeStartX = 0;
         let swipeStartY = 0;
         let isSwiping = false;
-        let swipeThreshold = 80; // Минимальное расстояние свайпа
+        let swipeThreshold = 80;
         let swipeCard = null;
-        let cardHistory = []; // История карточек для кнопки "назад"
+        let cardHistory = []; // История для кнопки "назад"
 
         // Инициализация
         document.addEventListener('DOMContentLoaded', () => {
@@ -860,20 +849,15 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             renderDecksList();
             updateStats();
             initEventListeners();
-            
-            // Инициализируем распознавание речи
             initSpeechSynthesis();
         });
 
         // Инициализация синтеза речи
         function initSpeechSynthesis() {
             if ('speechSynthesis' in window) {
-                // Проверяем доступность голосов
                 speechSynthesis.onvoiceschanged = () => {
                     console.log('Голоса загружены');
                 };
-            } else {
-                console.warn('Синтез речи не поддерживается в этом браузере');
             }
         }
 
@@ -889,19 +873,12 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             const wordToSpeak = appData.settings.reverse ? currentWord.rus : currentWord.eng;
             
             if ('speechSynthesis' in window) {
-                // Останавливаем любую текущую речь
                 speechSynthesis.cancel();
                 
-                // Создаем новое высказывание
                 const utterance = new SpeechSynthesisUtterance(wordToSpeak);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
                 
-                // Настройки
-                utterance.lang = 'en-US'; // Для английских слов
-                utterance.rate = 0.9; // Немного медленнее
-                utterance.pitch = 1;
-                utterance.volume = 1;
-                
-                // Пытаемся найти английский голос
                 const voices = speechSynthesis.getVoices();
                 const englishVoice = voices.find(voice => 
                     voice.lang.startsWith('en-') && voice.lang.includes('US')
@@ -911,7 +888,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     utterance.voice = englishVoice;
                 }
                 
-                // Визуальная обратная связь
                 const speechBtn = document.getElementById('speech-btn');
                 const originalText = speechBtn.textContent;
                 speechBtn.textContent = '🔊';
@@ -930,39 +906,47 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     speechBtn.style.color = '';
                 };
                 
-                // Произносим слово
                 speechSynthesis.speak(utterance);
-            } else {
-                alert('Функция произнесения слов не поддерживается в вашем браузере');
             }
         }
 
-        // Переход к предыдущей карточке
+        // Переход к предыдущей карточке - ИСПРАВЛЕНО
         function goToPreviousCard() {
-            if (!currentStudySession || cardHistory.length === 0) return;
+            if (!currentStudySession || cardHistory.length === 0) {
+                console.log('Нет истории или сессии');
+                return;
+            }
+            
+            console.log('История до возврата:', cardHistory);
             
             const session = currentStudySession;
             
             // Получаем предыдущее состояние из истории
             const prevState = cardHistory.pop();
             
-            if (prevState) {
-                // Восстанавливаем состояние
-                session.currentIndex = prevState.currentIndex;
-                session.knownWords = new Set(prevState.knownWords);
-                session.unknownWords = new Set(prevState.unknownWords);
-                
-                // Обновляем UI
-                updateStudyUI();
-                
-                // Произносим слово
-                if (prevState.wordId) {
-                    setTimeout(speakCurrentWord, 300);
-                }
+            if (!prevState) {
+                console.log('Нет предыдущего состояния');
+                return;
             }
+            
+            console.log('Восстанавливаем состояние:', prevState);
+            
+            // Восстанавливаем состояние
+            session.currentIndex = prevState.currentIndex;
+            session.knownWords = new Set(prevState.knownWords || []);
+            session.unknownWords = new Set(prevState.unknownWords || []);
+            
+            // Обновляем кнопку "назад"
+            updatePrevButton();
+            
+            // Обновляем UI
+            updateStudyUI();
+            
+            // Произносим слово
+            setTimeout(speakCurrentWord, 300);
         }
 
-        // Сохранение состояния карточки в историю
+        // Сохранение состояния карточки в историю - ИСПРАВЛЕНО
         function saveCardToHistory() {
             if (!currentStudySession) return;
             
@@ -971,18 +955,37 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             if (!currentWord) return;
             
-            // Сохраняем текущее состояние перед изменением
-            cardHistory.push({
+            // Сохраняем состояние ДО изменения
+            const historyEntry = {
                 currentIndex: session.currentIndex,
                 knownWords: Array.from(session.knownWords),
                 unknownWords: Array.from(session.unknownWords),
                 wordId: currentWord.id,
                 timestamp: Date.now()
-            });
+            };
             
-            // Ограничиваем размер истории (последние 10 карточек)
-            if (cardHistory.length > 10) {
+            console.log('Сохранено в историю:', historyEntry);
+            
+            cardHistory.push(historyEntry);
+            
+            // Ограничиваем размер истории
+            if (cardHistory.length > 20) {
                 cardHistory.shift();
+            }
+            
+            // Обновляем состояние кнопки "назад"
+            updatePrevButton();
+        }
+
+        // Обновление состояния кнопки "назад"
+        function updatePrevButton() {
+            const prevBtn = document.getElementById('prev-btn');
+            if (cardHistory.length > 0) {
+                prevBtn.disabled = false;
+                prevBtn.style.opacity = '1';
+            } else {
+                prevBtn.disabled = true;
+                prevBtn.style.opacity = '0.5';
             }
         }
 
@@ -992,15 +995,12 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             swipeCard = cardElement;
             
-            // Начало касания
             cardElement.addEventListener('touchstart', handleTouchStart, { passive: true });
             cardElement.addEventListener('mousedown', handleMouseDown);
             
-            // Движение
             cardElement.addEventListener('touchmove', handleTouchMove, { passive: false });
             cardElement.addEventListener('mousemove', handleMouseMove);
             
-            // Конец касания
             cardElement.addEventListener('touchend', handleTouchEnd);
             cardElement.addEventListener('mouseup', handleMouseUp);
             cardElement.addEventListener('mouseleave', handleMouseLeave);
@@ -1017,9 +1017,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             if (swipeCard) {
                 swipeCard.classList.add('swiping');
             }
-            
-            // Показываем индикаторы
-            showSwipeIndicators();
         }
 
         function handleTouchMove(e) {
@@ -1042,12 +1039,9 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 swipeCard.classList.remove('swiping');
                 finishSwipe();
             }
-            
-            // Скрываем индикаторы
-            hideSwipeIndicators();
         }
 
-        // Обработчики для mouse событий (для десктопов)
+        // Обработчики для mouse событий
         function handleMouseDown(e) {
             swipeStartX = e.clientX;
             swipeStartY = e.clientY;
@@ -1056,8 +1050,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             if (swipeCard) {
                 swipeCard.classList.add('swiping');
             }
-            
-            showSwipeIndicators();
         }
 
         function handleMouseMove(e) {
@@ -1080,8 +1072,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 swipeCard.classList.remove('swiping');
                 finishSwipe();
             }
-            
-            hideSwipeIndicators();
         }
 
         function handleMouseLeave() {
@@ -1093,8 +1083,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 swipeCard.classList.remove('swiping');
                 swipeCard.style.transform = '';
             }
-            
-            hideSwipeIndicators();
         }
 
         // Обновление позиции при свайпе
@@ -1102,13 +1090,11 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             if (!swipeCard) return;
             
             const deltaX = currentX - swipeStartX;
-            const deltaY = currentY - swipeStartY;
             
             // Проверяем, что свайп преимущественно горизонтальный
-            if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                const rotation = deltaX * 0.1; // Немного вращаем карточку
+            if (Math.abs(deltaX) > 20) {
+                const rotation = deltaX * 0.1;
                 
-                // Применяем трансформацию
                 swipeCard.style.transform = `translateX(${deltaX}px) rotate(${rotation}deg)`;
                 
                 // Показываем соответствующий индикатор
@@ -1116,8 +1102,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     showSwipeRightIndicator();
                 } else if (deltaX < -swipeThreshold * 0.5) {
                     showSwipeLeftIndicator();
-                } else {
-                    hideSwipeIndicators();
                 }
             }
         }
@@ -1129,66 +1113,17 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             const currentTransform = swipeCard.style.transform;
             const translateX = parseFloat(currentTransform.match(/translateX\(([-\d.]+)px\)/)?.[1] || 0);
             
-            // Сбрасываем трансформацию
             swipeCard.style.transform = '';
             
-            // Проверяем, достаточно ли длинный был свайп
             if (Math.abs(translateX) > swipeThreshold) {
+                // Сохраняем текущее состояние в историю ПЕРЕД изменением
+                saveCardToHistory();
+                
                 if (translateX > 0) {
-                    // Свайп вправо - "Знаю"
-                    markKnownWithAnimation('right');
-                } else {
-                    // Свайп влево - "Не знаю"
-                    markUnknownWithAnimation('left');
-                }
-            }
-        }
-
-        // Анимация свайпа вправо
-        function markKnownWithAnimation(direction) {
-            if (!swipeCard) return;
-            
-            // Сохраняем в историю перед изменением
-            saveCardToHistory();
-            
-            // Анимация
-            swipeCard.style.transition = 'transform 0.3s, opacity 0.3s';
-            
-            if (direction === 'right') {
-                swipeCard.style.transform = 'translateX(200px) rotate(15deg)';
-            } else {
-                swipeCard.style.transform = 'translateX(-200px) rotate(-15deg)';
-            }
-            swipeCard.style.opacity = '0';
-            
-            // После анимации вызываем соответствующую функцию
-            setTimeout(() => {
-                if (direction === 'right') {
                     markKnown();
                 } else {
                     markUnknown();
                 }
-                
-                // Сбрасываем стили
-                swipeCard.style.transition = '';
-                swipeCard.style.transform = '';
-                swipeCard.style.opacity = '';
-            }, 300);
-        }
-
-        // Анимация свайпа влево
-        function markUnknownWithAnimation(direction) {
-            markKnownWithAnimation(direction); // Используем ту же функцию
-        }
-
-        // Показать индикаторы свайпа
-        function showSwipeIndicators() {
-            const leftIndicator = document.querySelector('.swipe-left-indicator');
-            const rightIndicator = document.querySelector('.swipe-right-indicator');
-            
-            if (leftIndicator && rightIndicator) {
-                leftIndicator.style.display = 'block';
-                rightIndicator.style.display = 'block';
             }
         }
 
@@ -1218,19 +1153,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Скрыть индикаторы свайпа
-        function hideSwipeIndicators() {
-            const leftIndicator = document.querySelector('.swipe-left-indicator');
-            const rightIndicator = document.querySelector('.swipe-right-indicator');
-            
-            if (leftIndicator) {
-                leftIndicator.classList.remove('show');
-            }
-            if (rightIndicator) {
-                rightIndicator.classList.remove('show');
-            }
-        }
-
         // Загрузка данных
         function loadData() {
             try {
@@ -1239,13 +1161,11 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     const parsed = JSON.parse(saved);
                     appData = parsed;
                     
-                    // Инициализация отсутствующих полей
                     if (!appData.decks) appData.decks = [];
                     if (!appData.folders) appData.folders = [];
                     if (!appData.settings) appData.settings = { shuffle: false, reverse: false };
                     if (!appData.studyProgress) appData.studyProgress = {};
                     
-                    // Инициализация колод
                     appData.decks.forEach(deck => {
                         if (!deck.words) deck.words = [];
                         if (!deck.iterations) deck.iterations = [];
@@ -1279,7 +1199,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
 
         // Инициализация обработчиков событий
         function initEventListeners() {
-            // Режим мультиколоды
             const multiModeSelect = document.getElementById('multi-mode');
             if (multiModeSelect) {
                 multiModeSelect.addEventListener('change', function() {
@@ -1455,7 +1374,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             const tree = document.getElementById('folders-tree');
             tree.innerHTML = '';
             
-            // Колоды без папок
             const rootDecks = appData.decks.filter(d => !d.folderId);
             if (rootDecks.length > 0) {
                 rootDecks.forEach(deck => {
@@ -1474,7 +1392,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 });
             }
             
-            // Папки
             appData.folders.forEach(folder => {
                 const folderDecks = appData.decks.filter(d => d.folderId === folder.id);
                 
@@ -1614,12 +1531,10 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             appData.decks = appData.decks.filter(d => d.id !== deckId);
             
-            // Удалить из папок
             appData.folders.forEach(folder => {
                 folder.decks = folder.decks.filter(id => id !== deckId);
             });
             
-            // Удалить прогресс
             if (appData.studyProgress[deckId]) {
                 delete appData.studyProgress[deckId];
             }
@@ -1638,7 +1553,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             if (folder.decks.length > 0) {
                 if (!confirm('В папке есть колоды. Удалить папку и все колоды внутри?')) return;
                 
-                // Удалить все колоды в папке
                 appData.decks = appData.decks.filter(d => d.folderId !== folderId);
             }
             
@@ -1648,7 +1562,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             updateStats();
         }
 
-        // Изучение колоды - автоматическое продолжение с сохраненного места
+        // Изучение колоды - ИСПРАВЛЕНО (проблема с количеством слов)
         function studyDeck(deckId) {
             const deck = appData.decks.find(d => d.id === deckId);
             if (!deck || deck.words.length === 0) {
@@ -1657,42 +1571,39 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
             
             currentDeckId = deckId;
-            cardHistory = []; // Сбрасываем историю при начале новой сессии
+            cardHistory = []; // Сбрасываем историю
+            updatePrevButton(); // Обновляем кнопку "назад"
             
             // Проверяем сохраненный прогресс
             const savedProgress = appData.studyProgress[deckId];
             let startIndex = 0;
             let knownWords = new Set();
             let unknownWords = new Set();
-            let sessionWords = deck.words;
+            let sessionWords = [...deck.words]; // Всегда начинаем с полной колоды
+            
+            console.log('Начало изучения колоды:', deck.name);
+            console.log('Полное количество слов в колоде:', deck.words.length);
+            console.log('Сохраненный прогресс:', savedProgress);
             
             if (savedProgress) {
-                // Восстанавливаем из сохраненного прогресса
-                if (savedProgress.remainingWords && savedProgress.remainingWords.length > 0) {
-                    // Создаем сессию только из оставшихся слов
-                    const wordsMap = new Map(deck.words.map(w => [w.id, w]));
-                    const remainingWords = [];
-                    
-                    savedProgress.remainingWords.forEach(wordId => {
-                        if (wordsMap.has(wordId)) {
-                            remainingWords.push(wordsMap.get(wordId));
-                        }
-                    });
-                    
-                    if (remainingWords.length > 0) {
-                        sessionWords = remainingWords;
-                        startIndex = savedProgress.currentIndex || 0;
-                        if (startIndex >= sessionWords.length) startIndex = 0;
-                        knownWords = new Set(savedProgress.knownWords || []);
-                        unknownWords = new Set(savedProgress.unknownWords || []);
-                    }
-                } else if (savedProgress.currentIndex !== undefined) {
-                    // Старый формат прогресса
-                    startIndex = savedProgress.currentIndex;
-                    if (startIndex >= deck.words.length) startIndex = 0;
-                    knownWords = new Set(savedProgress.knownWords || []);
-                    unknownWords = new Set(savedProgress.unknownWords || []);
+                // Восстанавливаем только позицию и статистику
+                startIndex = savedProgress.currentIndex || 0;
+                
+                // Проверяем, что индекс в пределах
+                if (startIndex >= sessionWords.length) {
+                    startIndex = 0;
                 }
+                
+                // Восстанавливаем статистику
+                if (savedProgress.knownWords) {
+                    knownWords = new Set(savedProgress.knownWords);
+                }
+                if (savedProgress.unknownWords) {
+                    unknownWords = new Set(savedProgress.unknownWords);
+                }
+                
+                console.log('Восстановлен прогресс: индекс', startIndex, 
+                          'знаю:', knownWords.size, 'не знаю:', unknownWords.size);
             }
             
             // Инициализация сессии
@@ -1701,7 +1612,8 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 currentIndex: startIndex,
                 knownWords: knownWords,
                 unknownWords: unknownWords,
-                sessionWords: sessionWords,
+                sessionWords: sessionWords, // Все слова колоды
+                originalWordsCount: deck.words.length, // Сохраняем оригинальное количество
                 iterationNumber: deck.iterations.length + 1,
                 isMultiDeck: false
             };
@@ -1710,7 +1622,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             document.getElementById('shuffle-btn').classList.toggle('active', appData.settings.shuffle);
             document.getElementById('reverse-btn').classList.toggle('active', appData.settings.reverse);
             
-            // Скрываем кнопку сохранения мультиколоды
             document.getElementById('save-current-multi-deck-btn').style.display = 'none';
             
             if (appData.settings.shuffle) {
@@ -1721,19 +1632,20 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             showModal('study-modal');
             updateStudyUI();
             
-            // Инициализируем свайп для карточки
             setTimeout(() => {
                 const cardElement = document.getElementById('flashcard');
                 initSwipe(cardElement);
             }, 100);
         }
 
-        // Обновление UI изучения
+        // Обновление UI изучения - ИСПРАВЛЕНО (показываем правильное количество)
         function updateStudyUI() {
             if (!currentStudySession) return;
             
             const session = currentStudySession;
-            const totalWords = session.sessionWords.length;
+            
+            // ВСЕГДА показываем общее количество слов из оригинальной колоды
+            const totalWords = session.originalWordsCount || session.sessionWords.length;
             
             if (totalWords === 0) {
                 document.getElementById('card-front').textContent = '🎉 Все слова изучены!';
@@ -1758,14 +1670,19 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             document.getElementById('flashcard').classList.remove('flipped');
             
-            // Обновление прогресса
+            // Обновление прогресса - ИСПРАВЛЕНО
+            // currentIndex + 1 показывает текущую позицию в текущей сессии
+            // totalWords показывает общее количество слов в колоде
             document.getElementById('current-card').textContent = currentIndex + 1;
             document.getElementById('total-cards').textContent = totalWords;
             document.getElementById('known-count').textContent = session.knownWords.size;
             document.getElementById('unknown-count').textContent = session.unknownWords.size;
             
-            const progress = ((currentIndex) / totalWords) * 100;
+            const progress = ((currentIndex) / session.sessionWords.length) * 100;
             document.getElementById('progress-fill').style.width = `${progress}%`;
+            
+            console.log('UI обновлен:', currentIndex + 1, '/', totalWords, 
+                      'слов в сессии:', session.sessionWords.length);
         }
 
         // Перемешивание
@@ -1789,7 +1706,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             const session = currentStudySession;
             const words = session.sessionWords;
             
-            // Перемешиваем только оставшиеся слова
             const processedWords = words.slice(0, session.currentIndex);
             const remainingWords = words.slice(session.currentIndex);
             
@@ -1826,7 +1742,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 session.knownWords.add(currentWord.id);
                 session.unknownWords.delete(currentWord.id);
                 
-                // Сохраняем прогресс
                 saveStudyProgress();
             }
             
@@ -1844,7 +1759,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 session.unknownWords.add(currentWord.id);
                 session.knownWords.delete(currentWord.id);
                 
-                // Сохраняем прогресс
                 saveStudyProgress();
             }
             
@@ -1865,40 +1779,45 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Сохранение прогресса изучения
+        // Сохранение прогресса изучения - ИСПРАВЛЕНО
         function saveStudyProgress() {
             if (!currentStudySession || !currentDeckId) return;
             
             const session = currentStudySession;
+            const deck = appData.decks.find(d => d.id === currentDeckId);
             
-            // Сохраняем только неизученные слова для продолжения
-            const remainingWords = session.sessionWords
-                .slice(session.currentIndex)
-                .map(w => w.id);
+            if (!deck) return;
             
+            // Сохраняем прогресс для продолжения с того же места
             appData.studyProgress[currentDeckId] = {
                 currentIndex: session.currentIndex,
                 knownWords: Array.from(session.knownWords),
                 unknownWords: Array.from(session.unknownWords),
-                remainingWords: remainingWords,
-                lastSaved: new Date().toISOString()
+                lastSaved: new Date().toISOString(),
+                // Важно: НЕ сохраняем отфильтрованные слова, только прогресс
             };
             
             saveData();
+            
+            console.log('Прогресс сохранен: индекс', session.currentIndex, 
+                      'всего слов в колоде:', deck.words.length);
         }
 
-        // Завершение сессии
+        // Завершение сессии - ИСПРАВЛЕНО
         function finishStudySession() {
             if (!currentStudySession) return;
             
             const session = currentStudySession;
+            const deck = appData.decks.find(d => d.id === session.deckId);
+            
+            if (!deck) return;
             
             // Если это мультиколода
             if (session.isMultiDeck) {
                 const unknownCount = session.unknownWords.size;
                 
                 if (unknownCount > 0) {
-                    // Продолжаем только с неизученными словами
+                    // Для мультиколоды продолжаем с неизученными словами
                     const unknownIds = new Set(session.unknownWords);
                     session.sessionWords = session.sessionWords.filter(
                         word => unknownIds.has(word.id)
@@ -1907,25 +1826,18 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     session.knownWords.clear();
                     session.unknownWords.clear();
                     
-                    // Сохраняем прогресс для продолжения
                     saveStudyProgress();
-                    
                     updateStudyUI();
                 } else {
-                    // Все слова изучены
                     alert('🎉 Все слова изучены!');
                     closeStudyModal();
                 }
             } else {
-                // Для обычной колоды
-                const deck = appData.decks.find(d => d.id === session.deckId);
-                if (!deck) return;
-                
-                // Создание итерации
+                // Для обычной колоды создаем итерацию
                 const iteration = {
                     number: session.iterationNumber,
                     date: new Date().toISOString(),
-                    totalWords: deck.words.length,
+                    totalWords: deck.words.length, // Всегда полное количество слов
                     knownWords: Array.from(session.knownWords),
                     unknownWords: Array.from(session.unknownWords)
                 };
@@ -1939,17 +1851,20 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 if (unknownCount > 0) {
                     // Продолжаем с неизученными словами
                     const unknownIds = new Set(session.unknownWords);
-                    session.sessionWords = session.sessionWords.filter(
+                    
+                    // Фильтруем только текущие неизученные слова для следующей сессии
+                    const remainingWords = session.sessionWords.filter(
                         word => unknownIds.has(word.id)
                     );
+                    
+                    // Но сохраняем прогресс с текущим индексом
+                    session.sessionWords = remainingWords;
                     session.currentIndex = 0;
                     session.knownWords.clear();
                     session.unknownWords.clear();
                     session.iterationNumber++;
                     
-                    // Сохраняем прогресс для продолжения
                     saveStudyProgress();
-                    
                     updateStudyUI();
                 } else {
                     // Все слова изучены - удаляем прогресс
@@ -1967,7 +1882,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
         // Закрытие окна изучения с сохранением прогресса
         function closeStudyModal() {
             if (currentStudySession && !currentStudySession.isMultiDeck) {
-                // Сохраняем прогресс для обычных колод
                 saveStudyProgress();
             }
             
@@ -1986,18 +1900,16 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             const session = currentStudySession;
             cardHistory = [];
+            updatePrevButton();
             
             if (session.isMultiDeck) {
-                // Для мультиколоды перезагружаем из конфигурации
                 if (currentMultiDeckConfig) {
                     createMultiDeckFromConfig(currentMultiDeckConfig);
                 }
             } else {
-                // Для обычной колоды
                 const deck = appData.decks.find(d => d.id === session.deckId);
                 if (!deck) return;
                 
-                // Удаляем сохраненный прогресс
                 delete appData.studyProgress[session.deckId];
                 saveData();
                 
@@ -2131,7 +2043,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     btn.dataset.deckId = deck.id;
                     btn.dataset.iterNum = iter.number;
                     
-                    // Выбираем последнюю итерацию по умолчанию
                     if (iter.number === deck.iterations.length) {
                         btn.classList.add('selected');
                         selectedIterations[deck.id] = iter.number;
@@ -2155,7 +2066,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Создание мультиколоды из конфигурации
+        // Создание мультиколоды из конфигурации - ЗАВЕРШЕНО
         function createMultiDeckFromConfig(config) {
             let allWords = [];
             let totalWords = 0;
@@ -2216,7 +2127,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 return;
             }
             
-            // Создание виртуальной колоды
             currentDeckId = `multi-${Date.now()}`;
             currentMultiDeckConfig = {
                 deckIds: config.deckIds,
@@ -2224,12 +2134,16 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 totalWords: totalWords
             };
             
+            cardHistory = [];
+            updatePrevButton();
+            
             currentStudySession = {
                 deckId: currentDeckId,
                 currentIndex: 0,
                 knownWords: new Set(),
                 unknownWords: new Set(),
                 sessionWords: allWords,
+                originalWordsCount: totalWords,
                 iterationNumber: 1,
                 isMultiDeck: true
             };
