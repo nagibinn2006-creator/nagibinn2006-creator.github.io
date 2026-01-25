@@ -1188,6 +1188,16 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     showSwipeLeftIndicator();
                 }
             }
+
+            const deltaY = currentY - swipeStartY;
+            
+            if (Math.abs(deltaY) < -40) {
+                swipeCard.style.transform = `translateY(${deltaY}px)`;
+                
+                if (deltaY <- swipeThreshold) {
+                    deleteCurrentWord()
+                } 
+            }
         }
 
         // Завершение свайпа
