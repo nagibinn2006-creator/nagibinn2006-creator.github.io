@@ -1231,10 +1231,8 @@ function finishSwipe() {
     
     if (Math.abs(translateY) > 150 && translateY < 0) {
         // Свайп вверх - удаление
-        if (confirm('Удалить это слово?')) {
             saveCardToHistory();
             deleteCurrentWord();
-        }
     } else if (Math.abs(translateX) > swipeThreshold) {
         // Оригинальный код для горизонтального свайпа
         saveCardToHistory();
