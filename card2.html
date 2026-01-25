@@ -137,19 +137,41 @@
             display: block;
         }
         
-        /* Карточка */
-        .card {
+        /* Карточка с анимацией свайпа */
+        .card-container {
             perspective: 1000px;
             width: 100%;
             height: 220px;
             margin: 15px auto;
+            position: relative;
+            touch-action: pan-y pinch-zoom;
         }
         
         @media (min-width: 768px) {
-            .card {
+            .card-container {
                 height: 280px;
                 max-width: 450px;
             }
+        }
+        
+        .card {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 0.6s, opacity 0.3s;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .card.swiping {
+            transition: none;
+        }
+        
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
         }
         
         .card-inner {
@@ -158,12 +180,6 @@
             position: relative;
             transform-style: preserve-3d;
             transition: transform 0.6s;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        
-        .card.flipped .card-inner {
-            transform: rotateY(180deg);
         }
         
         .card-front, .card-back {
@@ -200,6 +216,32 @@
             transform: rotateY(180deg);
         }
         
+        /* Индикаторы свайпа */
+        .swipe-indicator {
+            position: absolute;
+            top: 20px;
+            font-size: 24px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .swipe-left-indicator {
+            left: 20px;
+            color: #ef4444;
+        }
+        
+        .swipe-right-indicator {
+            right: 20px;
+            color: #10b981;
+        }
+        
+        .swipe-indicator.show {
+            opacity: 0.8;
+            transform: scale(1.2);
+        }
+        
         /* Кнопки смахивания - только эмодзи */
         .swipe-buttons {
             display: flex;
@@ -219,6 +261,7 @@
             font-size: 28px;
             cursor: pointer;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
         
         .swipe-left {
@@ -346,7 +389,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             margin: 12px 0;
             flex-wrap: wrap;
         }
@@ -362,11 +405,25 @@
             border: none;
             cursor: pointer;
             font-size: 18px;
+            transition: background 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #e2e8f0;
         }
         
         .control-btn.active {
             background: #4f46e5;
             color: white;
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         
         /* Список колод с кнопками в одну строку */
@@ -715,10 +772,9 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             <div class="flashcard-controls">
                 <button class="control-btn" id="shuffle-btn" onclick="toggleShuffle()" title="Перемешивать">🔀</button>
                 <button class="control-btn" id="reverse-btn" onclick="toggleReverse()" title="Обратная сторона">🔄</button>
+                <button class="control-btn" id="speech-btn" onclick="speakCurrentWord()" title="Произнести слово">🔊</button>
+                <button class="control-btn" id="prev-btn" onclick="goToPreviousCard()" title="Предыдущая карточка" disabled>◀️</button>
                 <button class="control-btn" onclick="restartSession()" title="Начать заново" style="background: #fee2e2; color: #ef4444;">🔄</button>
-                <button class="control-btn" id="speak-btn" onclick="speakCurrentWord()" title="Произнести">🔊</button>
-                <button class="control-btn" id="auto-speak-btn" onclick="toggleAutoSpeak()" title="Автопроизношение">🔇</button>
-                <button class="control-btn" onclick="deleteCurrentWord()" title="Удалить слово" style="background: #fee2e2; color: #ef4444;">🗑️</button>
                 <button class="control-btn" onclick="saveCurrentMultiDeck()" id="save-current-multi-deck-btn" title="Сохранить как колоду" style="display: none;">💾</button>
             </div>
 
@@ -733,11 +789,16 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 </div>
             </div>
 
-            <!-- Карточка -->
-            <div class="card" id="flashcard" onclick="flipCard()">
-                <div class="card-inner">
-                    <div class="card-front" id="card-front">Загрузка...</div>
-                    <div class="card-back" id="card-back">Загрузка...</div>
+            <!-- Карточка с индикаторами свайпа -->
+            <div class="card-container">
+                <div class="swipe-indicator swipe-left-indicator">❌</div>
+                <div class="swipe-indicator swipe-right-indicator">✅</div>
+                
+                <div class="card" id="flashcard" onclick="flipCard()">
+                    <div class="card-inner">
+                        <div class="card-front" id="card-front">Загрузка...</div>
+                        <div class="card-back" id="card-back">Загрузка...</div>
+                    </div>
                 </div>
             </div>
 
@@ -760,20 +821,23 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             folders: [],
             settings: {
                 shuffle: false,
-                reverse: false,
-                autoSpeak: true // Новая настройка: автоозвучивание
+                reverse: false
             },
-            studyProgress: {} // Храним прогресс изучения для каждой колоды
+            studyProgress: {}
         };
 
         let currentStudySession = null;
         let currentDeckId = null;
         let currentMultiDeckConfig = null;
-        let selectedIterations = {}; // Храним выбранные итерации для мультиколоды
-
-        // Проверка поддержки синтеза речи
-        const speechSupported = 'speechSynthesis' in window;
-        let speechSynth = speechSupported ? window.speechSynthesis : null;
+        let selectedIterations = {};
+        
+        // Переменные для управления свайпом
+        let swipeStartX = 0;
+        let swipeStartY = 0;
+        let isSwiping = false;
+        let swipeThreshold = 80;
+        let swipeCard = null;
+        let cardHistory = []; // История для кнопки "назад"
 
         // Инициализация
         document.addEventListener('DOMContentLoaded', () => {
@@ -783,16 +847,294 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             renderDecksList();
             updateStats();
             initEventListeners();
-            
-            // Инициализация кнопки автоозвучивания
-            if (speechSupported) {
-                updateAutoSpeakButton();
-            } else {
-                // Скрываем кнопки озвучивания, если не поддерживается
-                document.getElementById('speak-btn').style.display = 'none';
-                document.getElementById('auto-speak-btn').style.display = 'none';
-            }
+            initSpeechSynthesis();
         });
+
+        // Инициализация синтеза речи
+        function initSpeechSynthesis() {
+            if ('speechSynthesis' in window) {
+                speechSynthesis.onvoiceschanged = () => {
+                    console.log('Голоса загружены');
+                };
+            }
+        }
+
+        // Произнесение текущего слова
+        function speakCurrentWord() {
+            if (!currentStudySession || !currentStudySession.sessionWords) return;
+            
+            const session = currentStudySession;
+            const currentWord = session.sessionWords[session.currentIndex];
+            
+            if (!currentWord) return;
+            
+            const wordToSpeak = appData.settings.reverse ? currentWord.rus : currentWord.eng;
+            
+            if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(wordToSpeak);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
+                
+                const voices = speechSynthesis.getVoices();
+                const englishVoice = voices.find(voice => 
+                    voice.lang.startsWith('en-') && voice.lang.includes('US')
+                );
+                
+                if (englishVoice) {
+                    utterance.voice = englishVoice;
+                }
+                
+                const speechBtn = document.getElementById('speech-btn');
+                const originalText = speechBtn.textContent;
+                speechBtn.textContent = '🔊';
+                speechBtn.style.background = '#4f46e5';
+                speechBtn.style.color = 'white';
+                
+                utterance.onend = () => {
+                    speechBtn.textContent = originalText;
+                    speechBtn.style.background = '';
+                    speechBtn.style.color = '';
+                };
+                
+                utterance.onerror = () => {
+                    speechBtn.textContent = originalText;
+                    speechBtn.style.background = '';
+                    speechBtn.style.color = '';
+                };
+                
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        // Переход к предыдущей карточке
+        function goToPreviousCard() {
+            if (!currentStudySession || cardHistory.length === 0) return;
+            
+            const session = currentStudySession;
+            
+            // Получаем предыдущее состояние из истории
+            const prevState = cardHistory.pop();
+            
+            if (prevState) {
+                // Восстанавливаем состояние
+                session.currentIndex = prevState.currentIndex;
+                session.knownWords = new Set(prevState.knownWords || []);
+                session.unknownWords = new Set(prevState.unknownWords || []);
+                
+                // Обновляем кнопку "назад"
+                updatePrevButton();
+                
+                // Обновляем UI
+                updateStudyUI();
+                
+                // Произносим слово
+                setTimeout(speakCurrentWord, 300);
+            }
+        }
+
+        // Сохранение состояния карточки в историю
+        function saveCardToHistory() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            const currentWord = session.sessionWords[session.currentIndex];
+            
+            if (!currentWord) return;
+            
+            // Сохраняем состояние ДО изменения
+            const historyEntry = {
+                currentIndex: session.currentIndex,
+                knownWords: Array.from(session.knownWords),
+                unknownWords: Array.from(session.unknownWords),
+                wordId: currentWord.id,
+                timestamp: Date.now()
+            };
+            
+            cardHistory.push(historyEntry);
+            
+            // Ограничиваем размер истории
+            if (cardHistory.length > 20) {
+                cardHistory.shift();
+            }
+            
+            // Обновляем состояние кнопки "назад"
+            updatePrevButton();
+        }
+
+        // Обновление состояния кнопки "назад"
+        function updatePrevButton() {
+            const prevBtn = document.getElementById('prev-btn');
+            if (cardHistory.length > 0) {
+                prevBtn.disabled = false;
+                prevBtn.style.opacity = '1';
+            } else {
+                prevBtn.disabled = true;
+                prevBtn.style.opacity = '0.5';
+            }
+        }
+
+        // Инициализация свайпа
+        function initSwipe(cardElement) {
+            if (!cardElement) return;
+            
+            swipeCard = cardElement;
+            
+            cardElement.addEventListener('touchstart', handleTouchStart, { passive: true });
+            cardElement.addEventListener('mousedown', handleMouseDown);
+            
+            cardElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+            cardElement.addEventListener('mousemove', handleMouseMove);
+            
+            cardElement.addEventListener('touchend', handleTouchEnd);
+            cardElement.addEventListener('mouseup', handleMouseUp);
+            cardElement.addEventListener('mouseleave', handleMouseLeave);
+        }
+
+        // Обработчики для touch событий
+        function handleTouchStart(e) {
+            if (e.touches.length !== 1) return;
+            
+            swipeStartX = e.touches[0].clientX;
+            swipeStartY = e.touches[0].clientY;
+            isSwiping = true;
+            
+            if (swipeCard) {
+                swipeCard.classList.add('swiping');
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!isSwiping || e.touches.length !== 1) return;
+            
+            e.preventDefault();
+            
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
+            updateSwipePosition(currentX, currentY);
+        }
+
+        function handleTouchEnd(e) {
+            if (!isSwiping) return;
+            
+            isSwiping = false;
+            
+            if (swipeCard) {
+                swipeCard.classList.remove('swiping');
+                finishSwipe();
+            }
+        }
+
+        // Обработчики для mouse событий
+        function handleMouseDown(e) {
+            swipeStartX = e.clientX;
+            swipeStartY = e.clientY;
+            isSwiping = true;
+            
+            if (swipeCard) {
+                swipeCard.classList.add('swiping');
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (!isSwiping) return;
+            
+            e.preventDefault();
+            
+            const currentX = e.clientX;
+            const currentY = e.clientY;
+            
+            updateSwipePosition(currentX, currentY);
+        }
+
+        function handleMouseUp() {
+            if (!isSwiping) return;
+            
+            isSwiping = false;
+            
+            if (swipeCard) {
+                swipeCard.classList.remove('swiping');
+                finishSwipe();
+            }
+        }
+
+        function handleMouseLeave() {
+            if (!isSwiping) return;
+            
+            isSwiping = false;
+            
+            if (swipeCard) {
+                swipeCard.classList.remove('swiping');
+                swipeCard.style.transform = '';
+            }
+        }
+
+        // Обновление позиции при свайпе
+        function updateSwipePosition(currentX, currentY) {
+            if (!swipeCard) return;
+            
+            const deltaX = currentX - swipeStartX;
+            
+            if (Math.abs(deltaX) > 20) {
+                const rotation = deltaX * 0.1;
+                
+                swipeCard.style.transform = `translateX(${deltaX}px) rotate(${rotation}deg)`;
+                
+                if (deltaX > swipeThreshold * 0.5) {
+                    showSwipeRightIndicator();
+                } else if (deltaX < -swipeThreshold * 0.5) {
+                    showSwipeLeftIndicator();
+                }
+            }
+        }
+
+        // Завершение свайпа
+        function finishSwipe() {
+            if (!swipeCard) return;
+            
+            const currentTransform = swipeCard.style.transform;
+            const translateX = parseFloat(currentTransform.match(/translateX\(([-\d.]+)px\)/)?.[1] || 0);
+            
+            swipeCard.style.transform = '';
+            
+            if (Math.abs(translateX) > swipeThreshold) {
+                saveCardToHistory();
+                
+                if (translateX > 0) {
+                    markKnown();
+                } else {
+                    markUnknown();
+                }
+            }
+        }
+
+        // Показать индикатор свайпа вправо
+        function showSwipeRightIndicator() {
+            const indicator = document.querySelector('.swipe-right-indicator');
+            if (indicator) {
+                indicator.classList.add('show');
+            }
+            
+            const leftIndicator = document.querySelector('.swipe-left-indicator');
+            if (leftIndicator) {
+                leftIndicator.classList.remove('show');
+            }
+        }
+
+        // Показать индикатор свайпа влево
+        function showSwipeLeftIndicator() {
+            const indicator = document.querySelector('.swipe-left-indicator');
+            if (indicator) {
+                indicator.classList.add('show');
+            }
+            
+            const rightIndicator = document.querySelector('.swipe-right-indicator');
+            if (rightIndicator) {
+                rightIndicator.classList.remove('show');
+            }
+        }
 
         // Загрузка данных
         function loadData() {
@@ -802,13 +1144,11 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     const parsed = JSON.parse(saved);
                     appData = parsed;
                     
-                    // Инициализация отсутствующих полей
                     if (!appData.decks) appData.decks = [];
                     if (!appData.folders) appData.folders = [];
-                    if (!appData.settings) appData.settings = { shuffle: false, reverse: false, autoSpeak: true };
+                    if (!appData.settings) appData.settings = { shuffle: false, reverse: false };
                     if (!appData.studyProgress) appData.studyProgress = {};
                     
-                    // Инициализация колод
                     appData.decks.forEach(deck => {
                         if (!deck.words) deck.words = [];
                         if (!deck.iterations) deck.iterations = [];
@@ -824,7 +1164,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 appData = { 
                     decks: [], 
                     folders: [], 
-                    settings: { shuffle: false, reverse: false, autoSpeak: true },
+                    settings: { shuffle: false, reverse: false },
                     studyProgress: {}
                 };
             }
@@ -842,7 +1182,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
 
         // Инициализация обработчиков событий
         function initEventListeners() {
-            // Режим мультиколоды
             const multiModeSelect = document.getElementById('multi-mode');
             if (multiModeSelect) {
                 multiModeSelect.addEventListener('change', function() {
@@ -854,148 +1193,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                         renderIterationSelectors();
                     }
                 });
-            }
-        }
-
-        // Озвучивание текста
-        function speakText(text) {
-            if (!speechSupported || !speechSynth) return;
-            
-            // Останавливаем текущее воспроизведение
-            speechSynth.cancel();
-            
-            // Определяем язык (русский или английский)
-            const isEnglish = /^[a-zA-Z]/.test(text.trim());
-            const lang = isEnglish ? 'en-US' : 'ru-RU';
-            
-            // Создаем utterance
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = lang;
-            utterance.rate = 0.9; // Скорость речи
-            
-            // Пробуем найти подходящий голос
-            const voices = speechSynth.getVoices();
-            if (voices.length > 0) {
-                const preferredVoice = voices.find(voice => 
-                    voice.lang.startsWith(isEnglish ? 'en' : 'ru')
-                );
-                if (preferredVoice) {
-                    utterance.voice = preferredVoice;
-                }
-            }
-            
-            // Воспроизводим
-            speechSynth.speak(utterance);
-        }
-
-        // Озвучивание текущего слова
-        function speakCurrentWord() {
-            if (!currentStudySession || !speechSupported) return;
-            
-            const session = currentStudySession;
-            const currentWord = session.sessionWords[session.currentIndex];
-            if (!currentWord) return;
-            
-            // Определяем, какое слово озвучивать (английское)
-            const textToSpeak = currentWord.eng;
-            speakText(textToSpeak);
-        }
-
-        // Переключение автоозвучивания
-        function toggleAutoSpeak() {
-            if (!speechSupported) return;
-            
-            appData.settings.autoSpeak = !appData.settings.autoSpeak;
-            saveData();
-            updateAutoSpeakButton();
-        }
-
-        // Обновление кнопки автоозвучивания
-        function updateAutoSpeakButton() {
-            const btn = document.getElementById('auto-speak-btn');
-            if (!btn) return;
-            
-            if (appData.settings.autoSpeak) {
-                btn.textContent = '🔊';
-                btn.title = 'Автопроизношение включено';
-                btn.classList.add('active');
-            } else {
-                btn.textContent = '🔇';
-                btn.title = 'Автопроизношение выключено';
-                btn.classList.remove('active');
-            }
-        }
-
-        // Удаление текущего слова
-        function deleteCurrentWord() {
-            if (!currentStudySession) return;
-            
-            const session = currentStudySession;
-            const currentIndex = session.currentIndex;
-            const currentWord = session.sessionWords[currentIndex];
-            
-            if (!currentWord) return;
-            
-            if (!confirm(`Удалить слово "${currentWord.eng}" из колоды?`)) {
-                return;
-            }
-            
-            // Останавливаем озвучивание
-            if (speechSupported) {
-                speechSynth.cancel();
-            }
-            
-            // Удаляем из текущей сессии
-            session.sessionWords.splice(currentIndex, 1);
-            
-            // Если это не мультиколода, удаляем из оригинальной колоды
-            if (!session.isMultiDeck) {
-                const deck = appData.decks.find(d => d.id === session.deckId);
-                if (deck) {
-                    // Находим и удаляем слово из колоды
-                    const wordIndex = deck.words.findIndex(w => w.id === currentWord.id);
-                    if (wordIndex !== -1) {
-                        deck.words.splice(wordIndex, 1);
-                        // Обновляем индексы
-                        deck.words.forEach((w, idx) => {
-                            w.index = idx;
-                        });
-                    }
-                }
-            }
-            
-            // Удаляем из known/unknown слов
-            session.knownWords.delete(currentWord.id);
-            session.unknownWords.delete(currentWord.id);
-            
-            // Если слов не осталось
-            if (session.sessionWords.length === 0) {
-                alert('Все слова удалены');
-                closeStudyModal();
-                updateStats();
-                if (!session.isMultiDeck) {
-                    renderDecksList();
-                    renderFoldersTree();
-                }
-                return;
-            }
-            
-            // Корректируем индекс
-            if (currentIndex >= session.sessionWords.length) {
-                session.currentIndex = session.sessionWords.length - 1;
-            }
-            
-            // Сохраняем данные
-            saveData();
-            
-            // Обновляем интерфейс
-            updateStudyUI();
-            
-            // Обновляем статистику и списки если нужно
-            updateStats();
-            if (!session.isMultiDeck) {
-                renderDecksList();
-                renderFoldersTree();
             }
         }
 
@@ -1160,7 +1357,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             const tree = document.getElementById('folders-tree');
             tree.innerHTML = '';
             
-            // Колоды без папок
             const rootDecks = appData.decks.filter(d => !d.folderId);
             if (rootDecks.length > 0) {
                 rootDecks.forEach(deck => {
@@ -1179,7 +1375,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 });
             }
             
-            // Папки
             appData.folders.forEach(folder => {
                 const folderDecks = appData.decks.filter(d => d.folderId === folder.id);
                 
@@ -1319,12 +1514,10 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             appData.decks = appData.decks.filter(d => d.id !== deckId);
             
-            // Удалить из папок
             appData.folders.forEach(folder => {
                 folder.decks = folder.decks.filter(id => id !== deckId);
             });
             
-            // Удалить прогресс
             if (appData.studyProgress[deckId]) {
                 delete appData.studyProgress[deckId];
             }
@@ -1343,7 +1536,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             if (folder.decks.length > 0) {
                 if (!confirm('В папке есть колоды. Удалить папку и все колоды внутри?')) return;
                 
-                // Удалить все колоды в папке
                 appData.decks = appData.decks.filter(d => d.folderId !== folderId);
             }
             
@@ -1353,127 +1545,10 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             updateStats();
         }
 
-        // Изучение колоды - автоматическое продолжение с сохраненного места
-        function studyDeck(deckId) {
-            const deck = appData.decks.find(d => d.id === deckId);
-            if (!deck || deck.words.length === 0) {
-                alert('Колода пуста или не найдена');
-                return;
-            }
-            
-            currentDeckId = deckId;
-            
-            // Проверяем сохраненный прогресс
-            const savedProgress = appData.studyProgress[deckId];
-            let startIndex = 0;
-            let knownWords = new Set();
-            let unknownWords = new Set();
-            let sessionWords = deck.words;
-            
-            if (savedProgress) {
-                // Восстанавливаем из сохраненного прогресса
-                if (savedProgress.remainingWords && savedProgress.remainingWords.length > 0) {
-                    // Создаем сессию только из оставшихся слов
-                    const wordsMap = new Map(deck.words.map(w => [w.id, w]));
-                    const remainingWords = [];
-                    
-                    savedProgress.remainingWords.forEach(wordId => {
-                        if (wordsMap.has(wordId)) {
-                            remainingWords.push(wordsMap.get(wordId));
-                        }
-                    });
-                    
-                    if (remainingWords.length > 0) {
-                        sessionWords = remainingWords;
-                        startIndex = savedProgress.currentIndex || 0;
-                        if (startIndex >= sessionWords.length) startIndex = 0;
-                        knownWords = new Set(savedProgress.knownWords || []);
-                        unknownWords = new Set(savedProgress.unknownWords || []);
-                    }
-                } else if (savedProgress.currentIndex !== undefined) {
-                    // Старый формат прогресса
-                    startIndex = savedProgress.currentIndex;
-                    if (startIndex >= deck.words.length) startIndex = 0;
-                    knownWords = new Set(savedProgress.knownWords || []);
-                    unknownWords = new Set(savedProgress.unknownWords || []);
-                }
-            }
-            
-            // Инициализация сессии
-            currentStudySession = {
-                deckId: deckId,
-                currentIndex: startIndex,
-                knownWords: knownWords,
-                unknownWords: unknownWords,
-                sessionWords: sessionWords,
-                iterationNumber: deck.iterations.length + 1,
-                isMultiDeck: false
-            };
-            
-            // Обновляем кнопки настроек
-            document.getElementById('shuffle-btn').classList.toggle('active', appData.settings.shuffle);
-            document.getElementById('reverse-btn').classList.toggle('active', appData.settings.reverse);
-            updateAutoSpeakButton();
-            
-            // Скрываем кнопку сохранения мультиколоды
-            document.getElementById('save-current-multi-deck-btn').style.display = 'none';
-            
-            if (appData.settings.shuffle) {
-                shuffleWords();
-            }
-            
-            document.getElementById('study-title').textContent = deck.name;
-            showModal('study-modal');
-            updateStudyUI();
-        }
+        // Изучение колоды - ГЛАВНОЕ ИСПРАВЛЕНИЕ
+      
 
-        // Обновление UI изучения
-        function updateStudyUI() {
-            if (!currentStudySession) return;
-            
-            const session = currentStudySession;
-            const totalWords = session.sessionWords.length;
-            
-            if (totalWords === 0) {
-                document.getElementById('card-front').textContent = '🎉 Все слова изучены!';
-                document.getElementById('card-back').textContent = '🎉';
-                document.getElementById('current-card').textContent = '0';
-                document.getElementById('total-cards').textContent = '0';
-                return;
-            }
-            
-            const currentIndex = session.currentIndex;
-            const currentWord = session.sessionWords[currentIndex];
-            
-            if (!currentWord) {
-                console.error('Текущее слово не найдено');
-                return;
-            }
-            
-            const isReversed = appData.settings.reverse;
-            
-            document.getElementById('card-front').textContent = isReversed ? currentWord.rus : currentWord.eng;
-            document.getElementById('card-back').textContent = isReversed ? currentWord.eng : currentWord.rus;
-            
-            document.getElementById('flashcard').classList.remove('flipped');
-            
-            // Обновление прогресса
-            document.getElementById('current-card').textContent = currentIndex + 1;
-            document.getElementById('total-cards').textContent = totalWords;
-            document.getElementById('known-count').textContent = session.knownWords.size;
-            document.getElementById('unknown-count').textContent = session.unknownWords.size;
-            
-            const progress = ((currentIndex) / totalWords) * 100;
-            document.getElementById('progress-fill').style.width = `${progress}%`;
-            
-            // Автоозвучивание
-            if (speechSupported && appData.settings.autoSpeak) {
-                // Небольшая задержка для лучшего UX
-                setTimeout(() => {
-                    speakText(currentWord.eng);
-                }, 300);
-            }
-        }
+       
 
         // Перемешивание
         function toggleShuffle() {
@@ -1496,7 +1571,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             const session = currentStudySession;
             const words = session.sessionWords;
             
-            // Перемешиваем только оставшиеся слова
             const processedWords = words.slice(0, session.currentIndex);
             const remainingWords = words.slice(session.currentIndex);
             
@@ -1572,163 +1646,25 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Сохранение прогресса изучения
-        function saveStudyProgress() {
-            if (!currentStudySession || !currentDeckId) return;
-            
-            const session = currentStudySession;
-            
-            // Сохраняем только неизученные слова для продолжения
-            const remainingWords = session.sessionWords
-                .slice(session.currentIndex)
-                .map(w => w.id);
-            
-            appData.studyProgress[currentDeckId] = {
-                currentIndex: session.currentIndex,
-                knownWords: Array.from(session.knownWords),
-                unknownWords: Array.from(session.unknownWords),
-                remainingWords: remainingWords,
-                lastSaved: new Date().toISOString()
-            };
-            
-            saveData();
-        }
-
-        // Завершение сессии
-        function finishStudySession() {
-            if (!currentStudySession) return;
-            
-            const session = currentStudySession;
-            
-            // Если это мультиколода
-            if (session.isMultiDeck) {
-                const unknownCount = session.unknownWords.size;
-                
-                if (unknownCount > 0) {
-                    // Продолжаем только с неизученными словами
-                    const unknownIds = new Set(session.unknownWords);
-                    session.sessionWords = session.sessionWords.filter(
-                        word => unknownIds.has(word.id)
-                    );
-                    session.currentIndex = 0;
-                    session.knownWords.clear();
-                    session.unknownWords.clear();
-                    
-                    // Сохраняем прогресс для продолжения
-                    saveStudyProgress();
-                    
-                    updateStudyUI();
-                } else {
-                    // Все слова изучены
-                    alert('🎉 Все слова изучены!');
-                    closeStudyModal();
-                }
-            } else {
-                // Для обычной колоды
-                const deck = appData.decks.find(d => d.id === session.deckId);
-                if (!deck) return;
-                
-                // Создание итерации
-                const iteration = {
-                    number: session.iterationNumber,
-                    date: new Date().toISOString(),
-                    totalWords: deck.words.length,
-                    knownWords: Array.from(session.knownWords),
-                    unknownWords: Array.from(session.unknownWords)
-                };
-                
-                deck.iterations.push(iteration);
-                deck.stats.totalStudied++;
-                deck.stats.lastStudied = new Date().toISOString();
-                
-                const unknownCount = session.unknownWords.size;
-                
-                if (unknownCount > 0) {
-                    // Продолжаем с неизученными словами
-                    const unknownIds = new Set(session.unknownWords);
-                    session.sessionWords = session.sessionWords.filter(
-                        word => unknownIds.has(word.id)
-                    );
-                    session.currentIndex = 0;
-                    session.knownWords.clear();
-                    session.unknownWords.clear();
-                    session.iterationNumber++;
-                    
-                    // Сохраняем прогресс для продолжения
-                    saveStudyProgress();
-                    
-                    updateStudyUI();
-                } else {
-                    // Все слова изучены - удаляем прогресс
-                    delete appData.studyProgress[session.deckId];
-                    saveData();
-                    
-                    alert('🎉 Все слова изучены!');
-                    closeStudyModal();
-                }
-            }
-            
-            updateStats();
-        }
-
+        
+       
         // Закрытие окна изучения с сохранением прогресса
         function closeStudyModal() {
-            // Останавливаем озвучивание
-            if (speechSupported) {
-                speechSynth.cancel();
-            }
-            
-            if (currentStudySession && !currentStudySession.isMultiDeck) {
-                // Сохраняем прогресс для обычных колод
+            if (currentStudySession) {
+                // Всегда сохраняем прогресс при закрытии
                 saveStudyProgress();
             }
             
             currentStudySession = null;
             currentDeckId = null;
             currentMultiDeckConfig = null;
+            cardHistory = [];
             
             closeModal('study-modal');
             updateStats();
         }
 
-        // Начать заново
-        function restartSession() {
-            if (!currentStudySession) return;
-            
-            // Останавливаем озвучивание
-            if (speechSupported) {
-                speechSynth.cancel();
-            }
-            
-            const session = currentStudySession;
-            
-            if (session.isMultiDeck) {
-                // Для мультиколоды перезагружаем из конфигурации
-                if (currentMultiDeckConfig) {
-                    createMultiDeckFromConfig(currentMultiDeckConfig);
-                }
-            } else {
-                // Для обычной колоды
-                const deck = appData.decks.find(d => d.id === session.deckId);
-                if (!deck) return;
-                
-                // Удаляем сохраненный прогресс
-                delete appData.studyProgress[session.deckId];
-                saveData();
-                
-                session.currentIndex = 0;
-                session.knownWords.clear();
-                session.unknownWords.clear();
-                session.sessionWords = [...deck.words];
-                session.iterationNumber = deck.iterations.length + 1;
-                
-                if (appData.settings.shuffle) {
-                    shuffleWords();
-                }
-            }
-            
-            updateStudyUI();
-        }
+       
 
         // Рендер выбора колод для мультиколоды
         function renderMultiDeckSelect() {
@@ -1846,7 +1782,6 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                     btn.dataset.deckId = deck.id;
                     btn.dataset.iterNum = iter.number;
                     
-                    // Выбираем последнюю итерацию по умолчанию
                     if (iter.number === deck.iterations.length) {
                         btn.classList.add('selected');
                         selectedIterations[deck.id] = iter.number;
@@ -1870,7 +1805,257 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Создание мультиколоды из конфигурации
+         // Изучение колоды - ПРАВИЛЬНАЯ ЛОГИКА КАК В QUIZLET
+        function studyDeck(deckId) {
+            const deck = appData.decks.find(d => d.id === deckId);
+            if (!deck || deck.words.length === 0) {
+                alert('Колода пуста или не найдена');
+                return;
+            }
+            
+            currentDeckId = deckId;
+            cardHistory = [];
+            updatePrevButton();
+            
+            // Проверяем сохраненный прогресс
+            const savedProgress = appData.studyProgress[deckId];
+            let sessionWords = [];
+            let startIndex = 0;
+            let knownWords = new Set();
+            let unknownWords = new Set();
+            let iterationNumber = deck.iterations.length + 1;
+            
+            console.log('Начало изучения колоды:', deck.name);
+            console.log('Сохраненный прогресс:', savedProgress);
+            
+            if (savedProgress) {
+                // ВОССТАНАВЛИВАЕМ СОХРАНЕННУЮ СЕССИЮ
+                const wordMap = new Map(deck.words.map(w => [w.id, w]));
+                
+                // Восстанавливаем слова по ID
+                savedProgress.sessionWords.forEach(wordId => {
+                    if (wordMap.has(wordId)) {
+                        sessionWords.push(wordMap.get(wordId));
+                    }
+                });
+                
+                // Восстанавливаем состояние
+                startIndex = savedProgress.currentIndex || 0;
+                if (startIndex >= sessionWords.length) {
+                    startIndex = 0;
+                }
+                knownWords = new Set(savedProgress.knownWords || []);
+                unknownWords = new Set(savedProgress.unknownWords || []);
+                
+                console.log('Восстановлена сессия:', sessionWords.length, 'слов, позиция:', startIndex);
+            } else {
+                // НЕТ СОХРАНЕННОГО ПРОГРЕССА - НАЧИНАЕМ НОВУЮ СЕССИЮ
+                // Проверяем последнюю итерацию
+                if (deck.iterations.length > 0) {
+                    const lastIter = deck.iterations[deck.iterations.length - 1];
+                    // Берем только НЕИЗУЧЕННЫЕ слова из последней итерации
+                    if (lastIter.unknownWords && lastIter.unknownWords.length > 0) {
+                        const unknownIds = new Set(lastIter.unknownWords);
+                        sessionWords = deck.words.filter(w => unknownIds.has(w.id));
+                        console.log('Начинаем с неизученных слов из последней итерации:', sessionWords.length);
+                    } else {
+                        // Все слова изучены в последней итерации - начинаем новую итерацию со ВСЕХ слов
+                        sessionWords = [...deck.words];
+                        console.log('Все слова изучены, начинаем новую итерацию со всех слов');
+                    }
+                } else {
+                    // Нет итераций - начинаем со всех слов
+                    sessionWords = [...deck.words];
+                    console.log('Нет итераций, начинаем со всех слов');
+                }
+                
+                startIndex = 0;
+                knownWords = new Set();
+                unknownWords = new Set();
+            }
+            
+            // Инициализация сессии
+            currentStudySession = {
+                deckId: deckId,
+                currentIndex: startIndex,
+                knownWords: knownWords,
+                unknownWords: unknownWords,
+                sessionWords: sessionWords,
+                iterationNumber: iterationNumber,
+                isMultiDeck: false
+            };
+            
+            // Обновляем кнопки настроек
+            document.getElementById('shuffle-btn').classList.toggle('active', appData.settings.shuffle);
+            document.getElementById('reverse-btn').classList.toggle('active', appData.settings.reverse);
+            document.getElementById('save-current-multi-deck-btn').style.display = 'none';
+            
+            if (appData.settings.shuffle) {
+                shuffleWords();
+            }
+            
+            document.getElementById('study-title').textContent = deck.name;
+            showModal('study-modal');
+            updateStudyUI();
+            
+            setTimeout(() => {
+                const cardElement = document.getElementById('flashcard');
+                initSwipe(cardElement);
+            }, 100);
+        }
+
+        // Сохранение прогресса изучения - ПРАВИЛЬНО СОХРАНЯЕМ ПОЛНУЮ СЕССИЮ
+        function saveStudyProgress() {
+            if (!currentStudySession || !currentDeckId) return;
+            
+            const session = currentStudySession;
+            
+            // Сохраняем ВСЕ данные текущей сессии
+            appData.studyProgress[currentDeckId] = {
+                currentIndex: session.currentIndex,
+                knownWords: Array.from(session.knownWords),
+                unknownWords: Array.from(session.unknownWords),
+                sessionWords: session.sessionWords.map(w => w.id),
+                lastSaved: new Date().toISOString()
+            };
+            
+            saveData();
+        }
+
+        // Завершение сессии - ПРАВИЛЬНАЯ ЛОГИКА КАК В QUIZLET
+        function finishStudySession() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            
+            if (session.isMultiDeck) {
+                // Для мультиколоды
+                if (session.unknownWords.size > 0) {
+                    // Есть неизученные слова - продолжаем с них
+                    const unknownIds = new Set(session.unknownWords);
+                    session.sessionWords = session.sessionWords.filter(word => unknownIds.has(word.id));
+                    session.currentIndex = 0;
+                    session.knownWords.clear();
+                    session.unknownWords.clear();
+                    
+                    saveStudyProgress();
+                    alert(`Осталось ${unknownIds.size} неизученных слов. Продолжаем с них.`);
+                    updateStudyUI();
+                } else {
+                    // Все слова изучены
+                    delete appData.studyProgress[currentDeckId];
+                    saveData();
+                    alert('🎉 Все слова изучены!');
+                    closeStudyModal();
+                }
+            } else {
+                // Для обычной колоды - ПРАВИЛЬНАЯ ЛОГИКА КАК В QUIZLET
+                const deck = appData.decks.find(d => d.id === session.deckId);
+                if (!deck) return;
+                
+                // Создаем итерацию с текущими результатами
+                const iteration = {
+                    number: session.iterationNumber,
+                    date: new Date().toISOString(),
+                    totalWords: deck.words.length,
+                    knownWords: Array.from(session.knownWords),
+                    unknownWords: Array.from(session.unknownWords)
+                };
+                
+                deck.iterations.push(iteration);
+                deck.stats.totalStudied++;
+                deck.stats.lastStudied = new Date().toISOString();
+                
+                if (session.unknownWords.size > 0) {
+                    // Есть неизученные слова - создаем НОВУЮ СЕССИЮ ТОЛЬКО С НЕИЗУЧЕННЫМИ
+                    const unknownIds = new Set(session.unknownWords);
+                    const newSessionWords = deck.words.filter(word => unknownIds.has(word.id));
+                    
+                    // Сохраняем НОВУЮ сессию с неизученными словами
+                    appData.studyProgress[session.deckId] = {
+                        currentIndex: 0,
+                        knownWords: [],
+                        unknownWords: [],
+                        sessionWords: newSessionWords.map(w => w.id),
+                        lastSaved: new Date().toISOString()
+                    };
+                    
+                    saveData();
+                    
+                    // Обновляем текущую сессию для продолжения
+                    session.sessionWords = newSessionWords;
+                    session.currentIndex = 0;
+                    session.knownWords.clear();
+                    session.unknownWords.clear();
+                    session.iterationNumber = iteration.number + 1;
+                    
+                    // Уведомляем пользователя
+                    alert(`✅ Итерация ${iteration.number} завершена!\n✅ Изучено: ${iteration.knownWords.length}\n❌ Осталось неизученных: ${iteration.unknownWords.length}\n\nПродолжаем с неизученных слов.`);
+                    
+                    updateStudyUI();
+                } else {
+                    // ВСЕ слова изучены в этой итерации
+                    delete appData.studyProgress[session.deckId];
+                    saveData();
+                    
+                    // Определяем, показывать ли все слова или только неизученные из прошлых итераций
+                    let totalUnknown = 0;
+                    deck.iterations.forEach(iter => {
+                        totalUnknown += iter.unknownWords ? iter.unknownWords.length : 0;
+                    });
+                    
+                    if (totalUnknown > 0) {
+                        alert(`🎉 Отлично! Вы изучили все слова в этой итерации!\n\nВсего итераций: ${deck.iterations.length}\n\nПри следующем запуске начнется повторение слов, которые вы ранее не знали.`);
+                    } else {
+                        alert(`🎉 Превосходно! Вы изучили ВСЕ слова в колоде!\n\nВсе слова освоены. При следующем запуске начнется новая итерация со всеми словами.`);
+                    }
+                    
+                    closeStudyModal();
+                }
+            }
+            
+            updateStats();
+        }
+
+        // Начать заново - СО ВСЕМИ СЛОВАМИ
+        function restartSession() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            
+            if (session.isMultiDeck) {
+                // Для мультиколоды перезагружаем из конфигурации
+                if (currentMultiDeckConfig) {
+                    createMultiDeckFromConfig(currentMultiDeckConfig);
+                }
+            } else {
+                // Для обычной колоды - начинаем с ВСЕХ слов
+                const deck = appData.decks.find(d => d.id === session.deckId);
+                if (!deck) return;
+                
+                // Удаляем сохраненный прогресс
+                delete appData.studyProgress[session.deckId];
+                saveData();
+                
+                // Начинаем с ВСЕХ слов
+                session.currentIndex = 0;
+                session.knownWords.clear();
+                session.unknownWords.clear();
+                session.sessionWords = [...deck.words];
+                session.iterationNumber = deck.iterations.length + 1;
+                
+                if (appData.settings.shuffle) {
+                    shuffleWords();
+                }
+                
+                cardHistory = [];
+                updatePrevButton();
+                updateStudyUI();
+                alert('Сессия начата заново со всеми словами колоды.');
+            }
+        }
+
+        // Создание мультиколоды из конфигурации - с правильной логикой для режима "unknown"
         function createMultiDeckFromConfig(config) {
             let allWords = [];
             let totalWords = 0;
@@ -1882,23 +2067,35 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 let wordsToAdd = [];
                 
                 if (config.mode === 'all') {
+                    // Все слова из колоды
                     wordsToAdd = deck.words.map(w => ({
                         ...w,
                         deckId: deck.id,
                         id: `multi-${w.id}-${Date.now()}`
                     }));
                 } else if (config.mode === 'unknown') {
-                    const lastIter = deck.iterations.length > 0 ? deck.iterations[deck.iterations.length - 1] : null;
-                    if (lastIter && lastIter.unknownWords && lastIter.unknownWords.length > 0) {
-                        const unknownIds = new Set(lastIter.unknownWords);
-                        wordsToAdd = deck.words
-                            .filter(w => unknownIds.has(w.id))
-                            .map(w => ({
+                    // Только НЕИЗУЧЕННЫЕ слова из последней итерации
+                    if (deck.iterations.length > 0) {
+                        const lastIter = deck.iterations[deck.iterations.length - 1];
+                        if (lastIter.unknownWords && lastIter.unknownWords.length > 0) {
+                            const unknownIds = new Set(lastIter.unknownWords);
+                            wordsToAdd = deck.words
+                                .filter(w => unknownIds.has(w.id))
+                                .map(w => ({
+                                    ...w,
+                                    deckId: deck.id,
+                                    id: `multi-${w.id}-${Date.now()}`
+                                }));
+                        } else {
+                            // Если все слова изучены, берем все слова для повторения
+                            wordsToAdd = deck.words.map(w => ({
                                 ...w,
                                 deckId: deck.id,
                                 id: `multi-${w.id}-${Date.now()}`
                             }));
+                        }
                     } else {
+                        // Нет итераций - берем все слова
                         wordsToAdd = deck.words.map(w => ({
                             ...w,
                             deckId: deck.id,
@@ -1931,13 +2128,11 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 return;
             }
             
-            // Создание виртуальной колоды
             currentDeckId = `multi-${Date.now()}`;
-            currentMultiDeckConfig = {
-                deckIds: config.deckIds,
-                mode: config.mode,
-                totalWords: totalWords
-            };
+            currentMultiDeckConfig = config;
+            
+            cardHistory = [];
+            updatePrevButton();
             
             currentStudySession = {
                 deckId: currentDeckId,
@@ -1949,12 +2144,9 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 isMultiDeck: true
             };
             
-            // Обновляем кнопки настроек
             document.getElementById('shuffle-btn').classList.toggle('active', appData.settings.shuffle);
             document.getElementById('reverse-btn').classList.toggle('active', appData.settings.reverse);
-            updateAutoSpeakButton();
             
-            // Показываем кнопку сохранения
             document.getElementById('save-current-multi-deck-btn').style.display = 'flex';
             
             if (appData.settings.shuffle) {
@@ -1964,6 +2156,54 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             document.getElementById('study-title').textContent = `Мультиколода (${totalWords})`;
             showModal('study-modal');
             updateStudyUI();
+            
+            setTimeout(() => {
+                const cardElement = document.getElementById('flashcard');
+                initSwipe(cardElement);
+            }, 100);
+        }
+
+        // Обновление UI изучения - показываем правильные числа
+        function updateStudyUI() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            const totalWords = session.sessionWords.length;
+            
+            if (totalWords === 0) {
+                document.getElementById('card-front').textContent = '🎉 Все слова изучены!';
+                document.getElementById('card-back').textContent = '🎉';
+                document.getElementById('current-card').textContent = '0';
+                document.getElementById('total-cards').textContent = '0';
+                document.getElementById('known-count').textContent = '0';
+                document.getElementById('unknown-count').textContent = '0';
+                document.getElementById('progress-fill').style.width = '100%';
+                return;
+            }
+            
+            const currentIndex = session.currentIndex;
+            const currentWord = session.sessionWords[currentIndex];
+            
+            if (!currentWord) {
+                console.error('Текущее слово не найдено');
+                return;
+            }
+            
+            const isReversed = appData.settings.reverse;
+            
+            document.getElementById('card-front').textContent = isReversed ? currentWord.rus : currentWord.eng;
+            document.getElementById('card-back').textContent = isReversed ? currentWord.eng : currentWord.rus;
+            
+            document.getElementById('flashcard').classList.remove('flipped');
+            
+            // Обновление прогресса
+            document.getElementById('current-card').textContent = currentIndex + 1;
+            document.getElementById('total-cards').textContent = totalWords;
+            document.getElementById('known-count').textContent = session.knownWords.size;
+            document.getElementById('unknown-count').textContent = session.unknownWords.size;
+            
+            const progress = ((currentIndex) / totalWords) * 100;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
         }
 
         // Начать мультиколоду
