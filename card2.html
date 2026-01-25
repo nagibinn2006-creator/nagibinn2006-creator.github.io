@@ -1040,11 +1040,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 return;
             }
             
-            // Останавливаем озвучивание
-            if (speechSupported) {
-                speechSynth.cancel();
-            }
-            
+          
             // Удаляем из текущей сессии
             session.sessionWords.splice(currentIndex, 1);
             
