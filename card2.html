@@ -1229,7 +1229,7 @@ function finishSwipe() {
         ind.classList.remove('show');
     });
     
-    if (Math.abs(translateY) > 150 && translateY < 0) {
+    if (Math.abs(translateY) > 50 && translateY < 0) {
         // Свайп вверх - удаление
             saveCardToHistory();
             deleteCurrentWord();
