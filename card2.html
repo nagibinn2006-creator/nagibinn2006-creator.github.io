@@ -398,13 +398,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 40px;
-            height: 40px;
+            width: 30px;
+            height: 30px;
             border-radius: 8px;
             background: #f1f5f9;
             border: none;
             cursor: pointer;
-            font-size: 18px;
+            font-size: 15px;
             transition: background 0.2s;
         }
         
@@ -776,6 +776,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 <button class="control-btn" id="prev-btn" onclick="goToPreviousCard()" title="Предыдущая карточка" disabled>◀️</button>
                 <button class="control-btn" onclick="restartSession()" title="Начать заново" style="background: #fee2e2; color: #ef4444;">🔄</button>
                 <button class="control-btn" onclick="deleteCurrentWord()" title="Удалить слово" style="background: #fee2e2; color: #ef4444;">🗑️</button>
+                <button class="control-btn" id="auto-speak-btn" onclick="toggleAutoSpeak()" title="Автопроизношение">🔇</button>
                 <button class="control-btn" onclick="saveCurrentMultiDeck()" id="save-current-multi-deck-btn" title="Сохранить как колоду" style="display: none;">💾</button>
             </div>
 
@@ -822,7 +823,8 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             folders: [],
             settings: {
                 shuffle: false,
-                reverse: false
+                reverse: false,
+                autoSpeak: true
             },
             studyProgress: {}
         };
@@ -840,6 +842,10 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
         let swipeCard = null;
         let cardHistory = []; // История для кнопки "назад"
 
+          // Проверка поддержки синтеза речи
+        const speechSupported = 'speechSynthesis' in window;
+        let speechSynth = speechSupported ? window.speechSynthesis : null;
+
         // Инициализация
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
@@ -849,6 +855,13 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             updateStats();
             initEventListeners();
             initSpeechSynthesis();
+            if (speechSupported) {
+                updateAutoSpeakButton();
+            } else {
+                // Скрываем кнопки озвучивания, если не поддерживается
+                document.getElementById('speak-btn').style.display = 'none';
+                document.getElementById('auto-speak-btn').style.display = 'none';
+            }
         });
 
         // Инициализация синтеза речи
@@ -859,53 +872,68 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 };
             }
         }
-
+        function speakText(text) {
+            if (!speechSupported || !speechSynth) return;
+            
+            // Останавливаем текущее воспроизведение
+            speechSynth.cancel();
+            
+            // Определяем язык (русский или английский)
+            const isEnglish = /^[a-zA-Z]/.test(text.trim());
+            const lang = isEnglish ? 'en-US' : 'ru-RU';
+            
+            // Создаем utterance
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang;
+            utterance.rate = 0.9; // Скорость речи
+            
+            // Пробуем найти подходящий голос
+            const voices = speechSynth.getVoices();
+            if (voices.length > 0) {
+                const preferredVoice = voices.find(voice => 
+                    voice.lang.startsWith(isEnglish ? 'en' : 'ru')
+                );
+                if (preferredVoice) {
+                    utterance.voice = preferredVoice;
+                }
+            }
+            // Воспроизводим
+            speechSynth.speak(utterance);
+        }
         // Произнесение текущего слова
         function speakCurrentWord() {
-            if (!currentStudySession || !currentStudySession.sessionWords) return;
+            if (!currentStudySession || !speechSupported) return;
             
             const session = currentStudySession;
             const currentWord = session.sessionWords[session.currentIndex];
-            
             if (!currentWord) return;
             
-            const wordToSpeak = appData.settings.reverse ? currentWord.rus : currentWord.eng;
+            // Определяем, какое слово озвучивать (английское)
+            const textToSpeak = currentWord.eng;
+            speakText(textToSpeak);
+        }
+
+        // Переключение автоозвучивания
+        function toggleAutoSpeak() {
+            if (!speechSupported) return;
             
-            if ('speechSynthesis' in window) {
-                speechSynthesis.cancel();
-                
-                const utterance = new SpeechSynthesisUtterance(wordToSpeak);
-                utterance.lang = 'en-US';
-                utterance.rate = 0.9;
-                
-                const voices = speechSynthesis.getVoices();
-                const englishVoice = voices.find(voice => 
-                    voice.lang.startsWith('en-') && voice.lang.includes('US')
-                );
-                
-                if (englishVoice) {
-                    utterance.voice = englishVoice;
-                }
-                
-                const speechBtn = document.getElementById('speech-btn');
-                const originalText = speechBtn.textContent;
-                speechBtn.textContent = '🔊';
-                speechBtn.style.background = '#4f46e5';
-                speechBtn.style.color = 'white';
-                
-                utterance.onend = () => {
-                    speechBtn.textContent = originalText;
-                    speechBtn.style.background = '';
-                    speechBtn.style.color = '';
-                };
-                
-                utterance.onerror = () => {
-                    speechBtn.textContent = originalText;
-                    speechBtn.style.background = '';
-                    speechBtn.style.color = '';
-                };
-                
-                speechSynthesis.speak(utterance);
+            appData.settings.autoSpeak = !appData.settings.autoSpeak;
+            saveData();
+            updateAutoSpeakButton();
+        }
+        // Обновление кнопки автоозвучивания
+        function updateAutoSpeakButton() {
+            const btn = document.getElementById('auto-speak-btn');
+            if (!btn) return;
+            
+            if (appData.settings.autoSpeak) {
+                btn.textContent = '🔊';
+                btn.title = 'Автопроизношение включено';
+                btn.classList.add('active');
+            } else {
+                btn.textContent = '🔇';
+                btn.title = 'Автопроизношение выключено';
+                btn.classList.remove('active');
             }
         }
 
@@ -1040,7 +1068,11 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 return;
             }
             
-          
+            // Останавливаем озвучивание
+            if (speechSupported) {
+                speechSynth.cancel();
+            }
+            
             // Удаляем из текущей сессии
             session.sessionWords.splice(currentIndex, 1);
             
@@ -2272,6 +2304,13 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             const progress = ((currentIndex) / totalWords) * 100;
             document.getElementById('progress-fill').style.width = `${progress}%`;
+            // Автоозвучивание
+            if (speechSupported && appData.settings.autoSpeak) {
+                // Небольшая задержка для лучшего UX
+                setTimeout(() => {
+                    speakText(currentWord.eng);
+                }, 300);
+            }
         }
 
         // Начать мультиколоду
