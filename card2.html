@@ -775,6 +775,8 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 <button class="control-btn" id="speech-btn" onclick="speakCurrentWord()" title="Произнести слово">🔊</button>
                 <button class="control-btn" id="prev-btn" onclick="goToPreviousCard()" title="Предыдущая карточка" disabled>◀️</button>
                 <button class="control-btn" onclick="restartSession()" title="Начать заново" style="background: #fee2e2; color: #ef4444;">🔄</button>
+                 <button class="control-btn" id="auto-speak-btn" onclick="toggleAutoSpeak()" title="Автопроизношение">🔇</button>
+                <button class="control-btn" onclick="deleteCurrentWord()" title="Удалить слово" style="background: #fee2e2; color: #ef4444;">🗑️</button>
                 <button class="control-btn" onclick="saveCurrentMultiDeck()" id="save-current-multi-deck-btn" title="Сохранить как колоду" style="display: none;">💾</button>
             </div>
 
@@ -821,7 +823,8 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             folders: [],
             settings: {
                 shuffle: false,
-                reverse: false
+                reverse: false,
+                autoSpeak: true
             },
             studyProgress: {}
         };
@@ -849,7 +852,97 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             initEventListeners();
             initSpeechSynthesis();
         });
-
+        function toggleAutoSpeak() {
+            if (!speechSupported) return;
+            
+            appData.settings.autoSpeak = !appData.settings.autoSpeak;
+            saveData();
+            updateAutoSpeakButton();
+        }
+        function updateAutoSpeakButton() {
+            const btn = document.getElementById('auto-speak-btn');
+            if (!btn) return;
+            
+            if (appData.settings.autoSpeak) {
+                btn.textContent = '🔊';
+                btn.title = 'Автопроизношение включено';
+                btn.classList.add('active');
+            } else {
+                btn.textContent = '🔇';
+                btn.title = 'Автопроизношение выключено';
+                btn.classList.remove('active');
+            }
+        }
+        function deleteCurrentWord() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            const currentIndex = session.currentIndex;
+            const currentWord = session.sessionWords[currentIndex];
+            
+            if (!currentWord) return;
+            
+            if (!confirm(`Удалить слово "${currentWord.eng}" из колоды?`)) {
+                return;
+            }
+            
+            // Останавливаем озвучивание
+            if (speechSupported) {
+                speechSynth.cancel();
+            }
+            
+            // Удаляем из текущей сессии
+            session.sessionWords.splice(currentIndex, 1);
+            
+            // Если это не мультиколода, удаляем из оригинальной колоды
+            if (!session.isMultiDeck) {
+                const deck = appData.decks.find(d => d.id === session.deckId);
+                if (deck) {
+                    // Находим и удаляем слово из колоды
+                    const wordIndex = deck.words.findIndex(w => w.id === currentWord.id);
+                    if (wordIndex !== -1) {
+                        deck.words.splice(wordIndex, 1);
+                        // Обновляем индексы
+                        deck.words.forEach((w, idx) => {
+                            w.index = idx;
+                        });
+                    }
+                }
+            }
+             // Удаляем из known/unknown слов
+            session.knownWords.delete(currentWord.id);
+            session.unknownWords.delete(currentWord.id);
+            
+            // Если слов не осталось
+            if (session.sessionWords.length === 0) {
+                alert('Все слова удалены');
+                closeStudyModal();
+                updateStats();
+                if (!session.isMultiDeck) {
+                    renderDecksList();
+                    renderFoldersTree();
+                }
+                return;
+            }
+            
+            // Корректируем индекс
+            if (currentIndex >= session.sessionWords.length) {
+                session.currentIndex = session.sessionWords.length - 1;
+            }
+            
+            // Сохраняем данные
+            saveData();
+            
+            // Обновляем интерфейс
+            updateStudyUI();
+             // Обновляем статистику и списки если нужно
+            updateStats();
+            if (!session.isMultiDeck) {
+                renderDecksList();
+                renderFoldersTree();
+            }
+        }
+            
         // Инициализация синтеза речи
         function initSpeechSynthesis() {
             if ('speechSynthesis' in window) {
@@ -1654,6 +1747,9 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 // Всегда сохраняем прогресс при закрытии
                 saveStudyProgress();
             }
+             if (speechSupported) {
+                speechSynth.cancel();
+            }
             
             currentStudySession = null;
             currentDeckId = null;
@@ -2170,6 +2266,12 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             const session = currentStudySession;
             const totalWords = session.sessionWords.length;
             
+            if (speechSupported && appData.settings.autoSpeak) {
+                // Небольшая задержка для лучшего UX
+                setTimeout(() => {
+                    speakText(currentWord.eng);
+                }, 300);
+            }
             if (totalWords === 0) {
                 document.getElementById('card-front').textContent = '🎉 Все слова изучены!';
                 document.getElementById('card-back').textContent = '🎉';
@@ -2497,6 +2599,8 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             
             input.click();
         }
+
+        
     </script>
 </body>
 </html>
