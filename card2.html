@@ -236,6 +236,13 @@
             right: 20px;
             color: #10b981;
         }
+        .swipe-delete-indicator {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ef4444;
+    font-size: 32px;
+}
         
         .swipe-indicator.show {
             opacity: 0.8;
@@ -795,6 +802,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             <div class="card-container">
                 <div class="swipe-indicator swipe-left-indicator">❌</div>
                 <div class="swipe-indicator swipe-right-indicator">✅</div>
+                <div class="swipe-indicator swipe-delete-indicator" style="display: none;">🗑️</div>
                 
                 <div class="card" id="flashcard" onclick="flipCard()">
                     <div class="card-inner">
@@ -1004,22 +1012,22 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             }
         }
 
-        // Инициализация свайпа
-        function initSwipe(cardElement) {
-            if (!cardElement) return;
-            
-            swipeCard = cardElement;
-            
-            cardElement.addEventListener('touchstart', handleTouchStart, { passive: true });
-            cardElement.addEventListener('mousedown', handleMouseDown);
-            
-            cardElement.addEventListener('touchmove', handleTouchMove, { passive: false });
-            cardElement.addEventListener('mousemove', handleMouseMove);
-            
-            cardElement.addEventListener('touchend', handleTouchEnd);
-            cardElement.addEventListener('mouseup', handleMouseUp);
-            cardElement.addEventListener('mouseleave', handleMouseLeave);
-        }
+   // Инициализация свайпа
+function initSwipe(cardElement) {
+    if (!cardElement) return;
+    
+    swipeCard = cardElement;
+    
+    cardElement.addEventListener('touchstart', handleTouchStart, { passive: true });
+    cardElement.addEventListener('mousedown', handleMouseDown);
+    
+    cardElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+    cardElement.addEventListener('mousemove', handleMouseMove);
+    
+    cardElement.addEventListener('touchend', handleTouchEnd);
+    cardElement.addEventListener('mouseup', handleMouseUp);
+    cardElement.addEventListener('mouseleave', handleMouseLeave);
+}
 
         // Обработчики для touch событий
         function handleTouchStart(e) {
@@ -1172,53 +1180,72 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
         }
 
         // Обновление позиции при свайпе
-        function updateSwipePosition(currentX, currentY) {
-            if (!swipeCard) return;
-            
-            const deltaX = currentX - swipeStartX;
-            
-            if (Math.abs(deltaX) > 20) {
-                const rotation = deltaX * 0.1;
-                
-                swipeCard.style.transform = `translateX(${deltaX}px) rotate(${rotation}deg)`;
-                
-                if (deltaX > swipeThreshold * 0.5) {
-                    showSwipeRightIndicator();
-                } else if (deltaX < -swipeThreshold * 0.5) {
-                    showSwipeLeftIndicator();
-                }
-            }
-
-            const deltaY = currentY - swipeStartY;
-            
-            if (Math.abs(deltaY) < -40) {
-                swipeCard.style.transform = `translateY(${deltaY}px)`;
-                
-                if (deltaY <- swipeThreshold) {
-                    deleteCurrentWord()
-                } 
-            }
+        // Обновление позиции при свайпе
+function updateSwipePosition(currentX, currentY) {
+    if (!swipeCard) return;
+    
+    const deltaX = currentX - swipeStartX;
+    const deltaY = currentY - swipeStartY;
+    
+    // Если вертикальное перемещение значительное, обрабатываем как свайп вверх для удаления
+    if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY < -50) {
+        // Вертикальный свайп вверх
+        const opacity = Math.max(0.3, 1 + deltaY / 300);
+        swipeCard.style.transform = `translateY(${deltaY}px)`;
+        swipeCard.style.opacity = opacity;
+        
+        showSwipeDeleteIndicator();
+        return;
+    }
+    
+    // Оригинальный код для горизонтального свайпа
+    if (Math.abs(deltaX) > 20) {
+        const rotation = deltaX * 0.1;
+        
+        swipeCard.style.transform = `translateX(${deltaX}px) rotate(${rotation}deg)`;
+        
+        if (deltaX > swipeThreshold * 0.5) {
+            showSwipeRightIndicator();
+        } else if (deltaX < -swipeThreshold * 0.5) {
+            showSwipeLeftIndicator();
         }
-
+    }
+}
         // Завершение свайпа
-        function finishSwipe() {
-            if (!swipeCard) return;
-            
-            const currentTransform = swipeCard.style.transform;
-            const translateX = parseFloat(currentTransform.match(/translateX\(([-\d.]+)px\)/)?.[1] || 0);
-            
-            swipeCard.style.transform = '';
-            
-            if (Math.abs(translateX) > swipeThreshold) {
-                saveCardToHistory();
-                
-                if (translateX > 0) {
-                    markKnown();
-                } else {
-                    markUnknown();
-                }
-            }
+        // Завершение свайпа
+function finishSwipe() {
+    if (!swipeCard) return;
+    
+    const currentTransform = swipeCard.style.transform;
+    const translateX = parseFloat(currentTransform.match(/translateX\(([-\d.]+)px\)/)?.[1] || 0);
+    const translateY = parseFloat(currentTransform.match(/translateY\(([-\d.]+)px\)/)?.[1] || 0);
+    
+    // Сбрасываем трансформацию
+    swipeCard.style.transform = '';
+    swipeCard.style.opacity = '';
+    
+    // Прячем все индикаторы
+    document.querySelectorAll('.swipe-indicator').forEach(ind => {
+        ind.classList.remove('show');
+    });
+    
+    if (Math.abs(translateY) > 150 && translateY < 0) {
+        // Свайп вверх - удаление
+        if (confirm('Удалить это слово?')) {
+            saveCardToHistory();
+            deleteCurrentWord();
         }
+    } else if (Math.abs(translateX) > swipeThreshold) {
+        // Оригинальный код для горизонтального свайпа
+        saveCardToHistory();
+        
+        if (translateX > 0) {
+            markKnown();
+        } else {
+            markUnknown();
+        }
+    }
+}
 
         // Показать индикатор свайпа вправо
         function showSwipeRightIndicator() {
@@ -2581,7 +2608,41 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 alert('Ошибка экспорта данных');
             }
         }
+        // Функция для обработки вертикального свайпа вверх (для удаления)
+function handleVerticalSwipe(currentY) {
+    const deltaY = currentY - swipeStartY;
+    
+    // Если свайп вверх больше порога (например, 150px)
+    if (deltaY < -150) {
+        // Показываем индикатор удаления
+        const swipeCard = document.getElementById('flashcard');
+        if (swipeCard) {
+            swipeCard.style.transform = `translateY(${deltaY}px)`;
+            swipeCard.style.opacity = Math.max(0, 1 + deltaY / 300);
+        }
+        
+        // Можно добавить визуальный индикатор удаления
+        showSwipeDeleteIndicator();
+        return true;
+    }
+    return false;
+}
+// Показать индикатор удаления (свайп вверх)
+function showSwipeDeleteIndicator() {
+    const deleteIndicator = document.querySelector('.swipe-delete-indicator');
+    if (deleteIndicator) {
+        deleteIndicator.classList.add('show');
+    }
+    
+    // Скрываем другие индикаторы
+    const leftIndicator = document.querySelector('.swipe-left-indicator');
+    const rightIndicator = document.querySelector('.swipe-right-indicator');
+    if (leftIndicator) leftIndicator.classList.remove('show');
+    if (rightIndicator) rightIndicator.classList.remove('show');
+}
 
+// Или создайте индикатор в HTML, добавив этот div в card-container:
+// <div class="swipe-indicator swipe-delete-indicator">🗑️</div>
         // Импорт данных
         function importData() {
             const input = document.createElement('input');
