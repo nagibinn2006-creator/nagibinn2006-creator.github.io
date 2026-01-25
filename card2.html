@@ -775,6 +775,7 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
                 <button class="control-btn" id="speech-btn" onclick="speakCurrentWord()" title="Произнести слово">🔊</button>
                 <button class="control-btn" id="prev-btn" onclick="goToPreviousCard()" title="Предыдущая карточка" disabled>◀️</button>
                 <button class="control-btn" onclick="restartSession()" title="Начать заново" style="background: #fee2e2; color: #ef4444;">🔄</button>
+                <button class="control-btn" onclick="deleteCurrentWord()" title="Удалить слово" style="background: #fee2e2; color: #ef4444;">🗑️</button>
                 <button class="control-btn" onclick="saveCurrentMultiDeck()" id="save-current-multi-deck-btn" title="Сохранить как колоду" style="display: none;">💾</button>
             </div>
 
@@ -1024,6 +1025,77 @@ cat:кот" rows="5" style="margin-bottom: 12px;"></textarea>
             if (swipeCard) {
                 swipeCard.classList.remove('swiping');
                 finishSwipe();
+            }
+        }
+         function deleteCurrentWord() {
+            if (!currentStudySession) return;
+            
+            const session = currentStudySession;
+            const currentIndex = session.currentIndex;
+            const currentWord = session.sessionWords[currentIndex];
+            
+            if (!currentWord) return;
+            
+            if (!confirm(`Удалить слово "${currentWord.eng}" из колоды?`)) {
+                return;
+            }
+            
+            // Останавливаем озвучивание
+            if (speechSupported) {
+                speechSynth.cancel();
+            }
+            
+            // Удаляем из текущей сессии
+            session.sessionWords.splice(currentIndex, 1);
+            
+            // Если это не мультиколода, удаляем из оригинальной колоды
+            if (!session.isMultiDeck) {
+                const deck = appData.decks.find(d => d.id === session.deckId);
+                if (deck) {
+                    // Находим и удаляем слово из колоды
+                    const wordIndex = deck.words.findIndex(w => w.id === currentWord.id);
+                    if (wordIndex !== -1) {
+                        deck.words.splice(wordIndex, 1);
+                        // Обновляем индексы
+                        deck.words.forEach((w, idx) => {
+                            w.index = idx;
+                        });
+                    }
+                }
+            }
+            
+            // Удаляем из known/unknown слов
+            session.knownWords.delete(currentWord.id);
+            session.unknownWords.delete(currentWord.id);
+            
+            // Если слов не осталось
+            if (session.sessionWords.length === 0) {
+                alert('Все слова удалены');
+                closeStudyModal();
+                updateStats();
+                if (!session.isMultiDeck) {
+                    renderDecksList();
+                    renderFoldersTree();
+                }
+                return;
+            }
+            
+            // Корректируем индекс
+            if (currentIndex >= session.sessionWords.length) {
+                session.currentIndex = session.sessionWords.length - 1;
+            }
+            
+            // Сохраняем данные
+            saveData();
+            
+            // Обновляем интерфейс
+            updateStudyUI();
+            
+            // Обновляем статистику и списки если нужно
+            updateStats();
+            if (!session.isMultiDeck) {
+                renderDecksList();
+                renderFoldersTree();
             }
         }
 
