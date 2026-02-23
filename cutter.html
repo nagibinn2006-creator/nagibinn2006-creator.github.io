@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>PDF Смарт-нарезка</title>
+    <!-- PDF.js (основная библиотека и воркер) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- pdf-lib для создания новых PDF -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #e5e7eb;
+        }
+        /* Основной сплит-контейнер */
+        .split {
+            display: flex;
+            flex: 1;
+            flex-direction: column; /* по умолчанию вертикально (iPhone) */
+            overflow: hidden;
+            gap: 2px;
+            background: #9ca3af;
+        }
+        /* Панели */
+        .pane {
+            padding: 16px 12px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            background: white;
+        }
+        .controls-pane {
+            flex: 1.2; /* чуть меньше, чем предпросмотр */
+            background: #f9fafb;
+            border-bottom: 2px solid #d1d5db;
+        }
+        .preview-pane {
+            flex: 2;
+            background: #f3f4f6;
+        }
+        /* На iPad и больших экранах — горизонтально */
+        @media (min-width: 600px) {
+            .split {
+                flex-direction: row;
+            }
+            .controls-pane {
+                flex: 1;
+                border-bottom: none;
+                border-right: 2px solid #d1d5db;
+            }
+            .preview-pane {
+                flex: 2;
+            }
+        }
+
+        /* Элементы управления */
+        h3 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        .file-input-wrapper {
+            margin-bottom: 20px;
+        }
+        #fileInput {
+            width: 100%;
+            padding: 12px;
+            background: #e5e7eb;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            font-size: 16px;
+        }
+        /* Контейнер для строк диапазонов */
+        #rangesContainer {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        /* Одна строка: диапазон + имя + кнопка удаления */
+        .range-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            padding: 12px 10px;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .range-row input {
+            flex: 2 1 180px;
+            min-width: 140px;
+            padding: 12px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 30px;
+            font-size: 16px;
+            background: white;
+            transition: 0.2s;
+        }
+        .range-row input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+        .range-row .name-input {
+            flex: 1 1 140px;
+        }
+        .remove-row {
+            flex: 0 0 44px;
+            height: 44px;
+            border-radius: 30px;
+            border: none;
+            background: #fee2e2;
+            color: #b91c1c;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-left: auto;
+        }
+        .remove-row:active {
+            background: #fecaca;
+            transform: scale(0.95);
+        }
+        /* Кнопки действий */
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 20px 0 10px;
+        }
+        button {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 40px;
+            font-size: 17px;
+            font-weight: 500;
+            background: #e5e7eb;
+            color: #1f2937;
+            flex: 1 1 auto;
+            cursor: pointer;
+            transition: 0.15s;
+            touch-action: manipulation;
+            border: 1px solid transparent;
+        }
+        button:active {
+            background: #d1d5db;
+            transform: scale(0.97);
+        }
+        #sliceBtn {
+            background: #3b82f6;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(59,130,246,0.3);
+        }
+        #sliceBtn:active {
+            background: #2563eb;
+        }
+        #addRangeBtn {
+            background: #ffffff;
+            border: 1px solid #3b82f6;
+            color: #3b82f6;
+        }
+        /* Блок ссылок для скачивания */
+        #downloadLinks {
+            margin-top: 20px;
+            padding: 16px 12px;
+            background: #e0f2fe;
+            border-radius: 24px;
+            border: 1px solid #7dd3fc;
+        }
+        .download-link {
+            display: inline-block;
+            margin: 8px 8px 0 0;
+            padding: 12px 18px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 40px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 16px;
+        }
+        .download-link:active {
+            background: #1e3a8a;
+        }
+        /* Предпросмотр страниц */
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 10px 5px;
+        }
+        .preview-container canvas {
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            background: white;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            border: 2px solid white;
+            transition: 0.1s;
+        }
+        .info-message {
+            text-align: center;
+            color: #6b7280;
+            padding: 30px 10px;
+            font-style: italic;
+        }
+        .total-pages-badge {
+            background: #dbeafe;
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 14px;
+            display: inline-block;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="split">
+        <!-- Левая/верхняя панель управления (меньшая) -->
+        <div class="pane controls-pane">
+            <h3>📄 Настройка нарезки</h3>
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept="application/pdf">
+            </div>
+            <div id="rangesContainer">
+                <!-- Строки будут добавляться сюда динамически -->
+            </div>
+            <div class="action-buttons">
+                <button id="addRangeBtn">➕ Добавить</button>
+                <button id="sliceBtn">✂️ Нарезать</button>
+            </div>
+            <div id="downloadLinks">
+                <!-- Ссылки на готовые файлы появятся здесь -->
+            </div>
+        </div>
+
+        <!-- Правая/нижняя панель предпросмотра (большая) -->
+        <div class="pane preview-pane">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span class="total-pages-badge" id="pageCountBadge">⬅️ загрузите PDF</span>
+                <span style="color: #4b5563;">🔍 предпросмотр</span>
+            </div>
+            <div id="previewContainer" class="preview-container">
+                <div class="info-message">Файл не выбран</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // --- Инициализация глобальных переменных ---
+            // Библиотеки
+            const { PDFDocument } = PDFLib; // из pdf-lib
+            const pdfjsLib = window.pdfjsLib;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+            // Элементы DOM
+            const fileInput = document.getElementById('fileInput');
+            const rangesContainer = document.getElementById('rangesContainer');
+            const addRangeBtn = document.getElementById('addRangeBtn');
+            const sliceBtn = document.getElementById('sliceBtn');
+            const downloadLinksDiv = document.getElementById('downloadLinks');
+            const previewContainer = document.getElementById('previewContainer');
+            const pageCountBadge = document.getElementById('pageCountBadge');
+
+            // Состояние приложения
+            let currentPdfJsDoc = null;          // для предпросмотра (pdf.js)
+            let currentPdfLibDoc = null;          // для нарезки (pdf-lib)
+            let sourceBuffer = null;               // исходный ArrayBuffer
+            let totalPages = 0;
+            let renderId = 0;                       // для отмены старых рендеров
+            let createdUrls = [];                    // для освобождения Blob URL
+
+            // --- Вспомогательные функции ---
+            function revokeAllUrls() {
+                createdUrls.forEach(url => URL.revokeObjectURL(url));
+                createdUrls = [];
+            }
+
+            // Очистка предпросмотра и ссылок
+            function clearPreviewAndLinks() {
+                // очищаем контейнер предпросмотра
+                previewContainer.innerHTML = '';
+                // очищаем ссылки
+                downloadLinksDiv.innerHTML = '';
+                revokeAllUrls();
+            }
+
+            // Отображение сообщения в предпросмотре
+            function setPreviewMessage(msg) {
+                previewContainer.innerHTML = `<div class="info-message">${msg}</div>`;
+            }
+
+            // Обновление счетчика страниц
+            function updatePageBadge() {
+                if (totalPages > 0) {
+                    pageCountBadge.textContent = `📄 всего стр: ${totalPages}`;
+                } else {
+                    pageCountBadge.textContent = `⬅️ загрузите PDF`;
+                }
+            }
+
+            // --- Парсинг строки диапазонов (пример: "5-15, 1, 3-7") ---
+            function parseRangeString(rangeStr, maxPage) {
+                if (!rangeStr || rangeStr.trim() === '') {
+                    throw new Error('Пустая строка диапазона');
+                }
+                const parts = rangeStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                const pages = [];
+                const pageSet = new Set(); // для проверки дубликатов необязательно, но используем для отслеживания ошибок
+
+                for (let part of parts) {
+                    if (part.includes('-')) {
+                        // диапазон
+                        const dashParts = part.split('-').map(s => s.trim());
+                        if (dashParts.length !== 2) {
+                            throw new Error(`Неверный диапазон: "${part}"`);
+                        }
+                        const start = parseInt(dashParts[0], 10);
+                        const end = parseInt(dashParts[1], 10);
+                        if (isNaN(start) || isNaN(end) || start < 1 || end < 1 || start > end) {
+                            throw new Error(`Некорректные числа в диапазоне: "${part}"`);
+                        }
+                        if (start > maxPage || end > maxPage) {
+                            throw new Error(`Диапазон ${part} выходит за пределы (макс. ${maxPage})`);
+                        }
+                        for (let i = start; i <= end; i++) {
+                            pages.push(i);
+                        }
+                    } else {
+                        // одна страница
+                        const pageNum = parseInt(part, 10);
+                        if (isNaN(pageNum) || pageNum < 1 || pageNum > maxPage) {
+                            throw new Error(`Неверный номер страницы: "${part}" (макс. ${maxPage})`);
+                        }
+                        pages.push(pageNum);
+                    }
+                }
+                if (pages.length === 0) {
+                    throw new Error('Не удалось извлечь ни одной страницы');
+                }
+                return pages;
+            }
+
+            // --- Динамическое добавление строки (диапазон + имя) ---
+            function addRangeRow(rangeValue = '', nameValue = '') {
+                const row = document.createElement('div');
+                row.className = 'range-row';
+
+                const rangeInput = document.createElement('input');
+                rangeInput.type = 'text';
+                rangeInput.className = 'range-input';
+                rangeInput.placeholder = 'напр. 5-15, 1, 3-7';
+                rangeInput.value = rangeValue;
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'name-input';
+                nameInput.placeholder = 'имя файла (опц.)';
+                nameInput.value = nameValue;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-row';
+                removeBtn.innerHTML = '✕';
+                removeBtn.setAttribute('aria-label', 'Удалить');
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    row.remove();
+                });
+
+                row.appendChild(rangeInput);
+                row.appendChild(nameInput);
+                row.appendChild(removeBtn);
+                rangesContainer.appendChild(row);
+            }
+
+            // Инициализация одной строки при старте
+            addRangeRow('1-3', 'часть_1');
+
+            // --- Загрузка и обработка PDF ---
+            fileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Сброс состояния
+                clearPreviewAndLinks();
+                setPreviewMessage('⏳ Чтение файла...');
+                currentPdfJsDoc = null;
+                currentPdfLibDoc = null;
+                sourceBuffer = null;
+                totalPages = 0;
+                updatePageBadge();
+
+                try {
+                    // Читаем файл как ArrayBuffer
+                    const arrayBuffer = await file.arrayBuffer();
+                    sourceBuffer = arrayBuffer.slice(0); // копия, если понадобится
+
+                    // Загружаем документ в pdf.js для предпросмотра
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    currentPdfJsDoc = await loadingTask.promise;
+                    totalPages = currentPdfJsDoc.numPages;
+                    updatePageBadge();
+
+                    // Загружаем документ в pdf-lib для последующей нарезки
+                    currentPdfLibDoc = await PDFDocument.load(arrayBuffer);
+
+                    // Запускаем последовательный рендеринг страниц
+                    renderPreviewPages(currentPdfJsDoc, totalPages);
+
+                } catch (error) {
+                    console.error('Ошибка загрузки PDF:', error);
+                    setPreviewMessage('❌ Ошибка загрузки или повреждённый PDF');
+                    pageCountBadge.textContent = '⚠️ ошибка';
+                }
+            });
+
+            // --- Последовательный рендеринг страниц в предпросмотр ---
+            async function renderPreviewPages(pdfDoc, numPages) {
+                // Увеличиваем renderId, чтобы старые рендеры не мешали
+                const currentRender = ++renderId;
+                // Очищаем контейнер и показываем загрузку
+                previewContainer.innerHTML = '';
+
+                for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                    // Если появился новый рендер (новый файл), прерываемся
+                    if (currentRender !== renderId) {
+                        console.log('Рендер отменён (новый файл)');
+                        return;
+                    }
+
+                    try {
+                        const page = await pdfDoc.getPage(pageNum);
+                        // Задаём ширину для предпросмотра (около 200px для мобильных, но адаптивно)
+                        const viewport = page.getViewport({ width: 200 });
+
+                        // Создаём canvas
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        canvas.style.width = 'auto';
+                        canvas.style.height = 'auto';
+                        canvas.style.maxWidth = '100%';
+                        canvas.style.borderRadius = '12px';
+
+                        const context = canvas.getContext('2d');
+                        const renderContext = {
+                            canvasContext: context,
+                            viewport: viewport,
+                        };
+
+                        await page.render(renderContext).promise;
+                        // Добавляем canvas в контейнер
+                        previewContainer.appendChild(canvas);
+                    } catch (pageError) {
+                        console.warn(`Ошибка рендера страницы ${pageNum}:`, pageError);
+                        // Можно добавить заглушку, но продолжаем дальше
+                        const errorDiv = document.createElement('div');
+                        errorDiv.textContent = `⚠️ стр.${pageNum} не отобразилась`;
+                        previewContainer.appendChild(errorDiv);
+                    }
+                }
+            }
+
+            // --- Основная функция нарезки ---
+            sliceBtn.addEventListener('click', async () => {
+                // Проверки
+                if (!currentPdfLibDoc || !sourceBuffer || totalPages === 0) {
+                    alert('Сначала загрузите PDF-файл');
+                    return;
+                }
+
+                const rows = document.querySelectorAll('.range-row');
+                if (rows.length === 0) {
+                    alert('Добавьте хотя бы один диапазон для нарезки');
+                    return;
+                }
+
+                // Блокируем кнопку на время обработки
+                sliceBtn.disabled = true;
+                sliceBtn.textContent = '⏳ Нарезка...';
+                downloadLinksDiv.innerHTML = ''; // очищаем старые ссылки
+                revokeAllUrls();
+
+                // Собираем данные из строк
+                const jobs = [];
+                for (let row of rows) {
+                    const rangeInput = row.querySelector('.range-input');
+                    const nameInput = row.querySelector('.name-input');
+                    const rangeStr = rangeInput.value.trim();
+                    const baseName = nameInput.value.trim() || 'output';
+
+                    if (!rangeStr) {
+                        alert('Обнаружена пустая строка диапазона. Заполните или удалите её.');
+                        sliceBtn.disabled = false;
+                        sliceBtn.textContent = '✂️ Нарезать';
+                        return;
+                    }
+
+                    try {
+                        // Парсим номера страниц (1-based)
+                        const pageNumbers = parseRangeString(rangeStr, totalPages);
+                        // Преобразуем в индексы для pdf-lib (0-based)
+                        const pageIndices = pageNumbers.map(p => p - 1);
+                        jobs.push({
+                            indices: pageIndices,
+                            name: baseName
+                        });
+                    } catch (parseErr) {
+                        alert(`Ошибка в строке "${rangeStr}": ${parseErr.message}`);
+                        sliceBtn.disabled = false;
+                        sliceBtn.textContent = '✂️ Нарезать';
+                        return;
+                    }
+                }
+
+                // Если всё ок, начинаем создавать PDF
+                try {
+                    const sourcePdf = currentPdfLibDoc; // уже загружен
+
+                    for (let i = 0; i < jobs.length; i++) {
+                        const job = jobs[i];
+                        // Создаём новый PDF документ
+                        const newPdf = await PDFDocument.create();
+                        // Копируем страницы из исходного
+                        const copiedPages = await newPdf.copyPages(sourcePdf, job.indices);
+                        copiedPages.forEach(page => newPdf.addPage(page));
+
+                        // Сохраняем в байты
+                        const pdfBytes = await newPdf.save();
+                        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                        const url = URL.createObjectURL(blob);
+                        createdUrls.push(url);
+
+                        // Формируем имя файла с номером, если несколько одинаковых имён
+                        let finalFileName = job.name;
+                        if (!finalFileName.toLowerCase().endsWith('.pdf')) {
+                            finalFileName += '.pdf';
+                        }
+                        // Если не уникально, можно добавить индекс, но для простоты оставим как есть
+
+                        // Создаём ссылку
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = finalFileName;
+                        link.textContent = `📎 ${finalFileName}`;
+                        link.className = 'download-link';
+                        link.target = '_blank'; // для надёжности на мобильных
+                        downloadLinksDiv.appendChild(link);
+                    }
+
+                    if (jobs.length === 0) {
+                        downloadLinksDiv.innerHTML = '<p>Нет валидных заданий</p>';
+                    } else {
+                        // Добавим заголовок
+                        const title = document.createElement('p');
+                        title.textContent = '✅ Готово:';
+                        title.style.margin = '0 0 10px 0';
+                        title.style.fontWeight = '600';
+                        downloadLinksDiv.prepend(title);
+                    }
+
+                } catch (error) {
+                    console.error('Ошибка при нарезке:', error);
+                    alert('Произошла ошибка при создании PDF. Смотрите консоль.');
+                } finally {
+                    // Разблокируем кнопку
+                    sliceBtn.disabled = false;
+                    sliceBtn.textContent = '✂️ Нарезать';
+                }
+            });
+
+            // --- Добавление новой строки по кнопке ---
+            addRangeBtn.addEventListener('click', () => {
+                addRangeRow('', '');
+            });
+
+            // --- Дополнительно: очистка ссылок при загрузке нового файла (уже есть в change) ---
+            // Но также при ошибках/смене файла
+        })();
+    </script>
+</body>
+</html>
