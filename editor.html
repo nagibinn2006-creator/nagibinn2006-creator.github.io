@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>PDF Reader с рукописными заметками</title>
+    <title>PDF Reader с рукописными заметками (стилус)</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f0f2f5; overflow: hidden; }
@@ -16,23 +16,50 @@
         .tab .close:active { background: rgba(0,0,0,0.5); }
         #openPdfBtn { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         #settingsBtn { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: auto; }
-        /* Инструменты рисования */
+        /* Инструменты */
         .tool-icon { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 22px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; position: relative; }
         .tool-icon.active { background: rgba(255,255,255,0.4); }
         .tool-icon:active { background: rgba(255,255,255,0.6); }
-        #brushSizePicker { position: absolute; top: 100%; left: 0; background: white; color: black; border-radius: 8px; padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 1000; min-width: 180px; display: none; }
+        #brushSizePicker {
+            position: fixed; /* меняем на fixed, чтобы позиционировать относительно viewport */
+            background: white;
+            color: black;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            min-width: 220px;
+            display: none;
+        }
         #brushSizePicker.show { display: block; }
-        .color-palette { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
-        .color-item { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #ccc; cursor: pointer; }
+        .color-palette { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; max-width: 220px; }
+        .color-item { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #ccc; cursor: pointer; }
         .color-item.selected { border: 3px solid #000; }
         .slider-container { display: flex; flex-direction: column; gap: 5px; }
-        /* Основная область с разделителем */
+        /* Основная область */
         #mainContainer { flex: 1; display: flex; overflow: hidden; }
-        #pdfPanel { background: #e9ecef; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: 10px; transition: width 0.05s; }
-        #pdfContainer { padding-left: 5px; } /* отступ слева */
-        .pdf-page-wrapper { position: relative; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); background: white; }
-        .pdf-page-wrapper canvas { display: block; width: 100%; height: auto; }
-        .draw-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
+        #pdfPanel { background: #e9ecef; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; padding: 10px; transition: width 0.05s; }
+        #pdfContainer { width: 100%; max-width: 100%; padding-left: 5px; }
+        .pdf-page-wrapper {
+            position: relative;
+            margin-bottom: 15px; /* фиксированный отступ между страницами */
+            width: 100%;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .pdf-page-wrapper canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .draw-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* предотвращаем стандартные жесты на canvas */
+        }
         #resizer { width: 8px; background: #aaa; cursor: col-resize; transition: background 0.2s; }
         #resizer:hover, #resizer:active { background: #1976D2; }
         #commentsPanel { background: white; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid #ccc; }
@@ -41,8 +68,8 @@
         .comments-range span { align-self: center; }
         #commentsText { flex: 1; width: 100%; padding: 15px; font-size: 16px; border: none; resize: none; outline: none; }
         #pageIndicator { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white; padding: 12px 24px; border-radius: 40px; font-weight: bold; z-index: 100; pointer-events: none; }
-        /* Модальное окно настроек */
-        #settingsModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
+        /* Модальное окно */
+        #settingsModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 2000; }
         .modal-content { background: white; border-radius: 10px; padding: 20px; max-width: 500px; width: 90%; max-height: 80%; overflow: auto; }
         .modal-content h3 { margin-bottom: 15px; }
         .storage-info { margin-bottom: 15px; font-weight: bold; }
@@ -58,19 +85,12 @@
     <div id="topBar">
         <div id="tabContainer"></div>
         <button id="openPdfBtn" title="Открыть PDF">➕</button>
-        <button class="tool-icon" id="brushBtn" title="Кисть">🖌️</button>
-        <button class="tool-icon" id="eraserBtn" title="Ластик">🧽</button>
-        <div id="brushSizePicker" class="size-picker">
-            <div class="color-palette" id="colorPalette">
-                <div class="color-item" style="background:#FF0000;"></div>
-                <div class="color-item" style="background:#00FF00;"></div>
-                <div class="color-item" style="background:#0000FF;"></div>
-                <div class="color-item" style="background:#FFFF00;"></div>
-                <div class="color-item" style="background:#FF00FF;"></div>
-                <div class="color-item" style="background:#00FFFF;"></div>
-                <div class="color-item" style="background:#000000;"></div>
-                <div class="color-item" style="background:#FFFFFF; border:1px solid #999;"></div>
-            </div>
+        <button class="tool-icon" id="brushBtn" title="Кисть (стилус)">🖌️</button>
+        <button class="tool-icon" id="eraserBtn" title="Ластик (стилус)">🧽</button>
+        <button class="tool-icon" id="handBtn" title="Ладонь (листать)">✋</button>
+        <!-- Всплывающее окно для кисти/ластика -->
+        <div id="brushSizePicker">
+            <div class="color-palette" id="colorPalette"></div>
             <div class="slider-container">
                 <label>Размер: <span id="sizeValue">4</span></label>
                 <input type="range" id="sizeSlider" min="1" max="20" value="4">
@@ -79,7 +99,7 @@
         <button id="settingsBtn" title="Настройки">⚙️</button>
     </div>
 
-    <!-- Основная область с разделителем -->
+    <!-- Основная область -->
     <div id="mainContainer">
         <div id="pdfPanel" style="width: 70%;">
             <div id="pdfContainer"></div>
@@ -95,7 +115,6 @@
         </div>
     </div>
 
-    <!-- Плавающий индикатор страницы -->
     <div id="pageIndicator">Стр. 1</div>
 
     <!-- Модальное окно настроек -->
@@ -103,13 +122,12 @@
         <div class="modal-content">
             <h3>Настройки хранилища</h3>
             <div class="storage-info" id="storageSize">Загружено...</div>
-            <h4>Файлы с комментариями и заметками:</h4>
+            <h4>Файлы с данными:</h4>
             <div id="fileList"></div>
             <button id="closeModalBtn" style="margin-top:15px; padding:8px 16px;">Закрыть</button>
         </div>
     </div>
 
-    <!-- Скрытый input для выбора PDF -->
     <input type="file" id="fileInput" accept=".pdf,application/pdf" />
 
     <script>
@@ -117,16 +135,17 @@
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
             // ---------- Состояние ----------
-            const documents = [];               // массив открытых документов
+            const documents = [];
             let activeDocIndex = -1;
-            let currentTool = 'brush';            // 'brush' или 'eraser'
+            let currentTool = 'brush'; // 'brush', 'eraser', 'hand'
             let brushColor = '#FF0000';
             let brushSize = 4;
 
             // Рисование
             let isDrawing = false;
-            let currentStroke = null;             // текущий штрих { points, color, size }
-            let currentCanvas = null;              // canvas, на котором рисуем
+            let currentStroke = null;
+            let currentCanvas = null;
+            let lastPointerId = null; // для отслеживания стилуса
 
             // Элементы
             const tabContainer = document.getElementById('tabContainer');
@@ -147,10 +166,38 @@
             const closeModalBtn = document.getElementById('closeModalBtn');
             const brushBtn = document.getElementById('brushBtn');
             const eraserBtn = document.getElementById('eraserBtn');
+            const handBtn = document.getElementById('handBtn');
             const brushSizePicker = document.getElementById('brushSizePicker');
             const colorPalette = document.getElementById('colorPalette');
             const sizeSlider = document.getElementById('sizeSlider');
             const sizeValue = document.getElementById('sizeValue');
+
+            // ---------- Генерация палитры (30 цветов) ----------
+            function generateColorPalette() {
+                const colors = [];
+                // Основные цвета + градиенты
+                const baseColors = [
+                    '#FF0000','#00FF00','#0000FF','#FFFF00','#FF00FF','#00FFFF','#000000','#FFFFFF',
+                    '#FF4500','#FFD700','#ADFF2F','#00CED1','#1E90FF','#EE82EE','#A52A2A','#808080',
+                    '#F08080','#90EE90','#ADD8E6','#FFB6C1','#FFA07A','#20B2AA','#87CEFA','#778899',
+                    '#B0C4DE','#FFFFE0','#FAFAD2','#D3D3D3','#DAA520','#CD5C5C'
+                ];
+                baseColors.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'color-item';
+                    div.style.backgroundColor = c;
+                    div.setAttribute('data-color', c);
+                    div.addEventListener('click', () => {
+                        brushColor = c;
+                        document.querySelectorAll('.color-item').forEach(i => i.classList.remove('selected'));
+                        div.classList.add('selected');
+                    });
+                    colorPalette.appendChild(div);
+                });
+                // Выделяем красный по умолчанию
+                colorPalette.querySelector('[data-color="#FF0000"]').classList.add('selected');
+            }
+            generateColorPalette();
 
             // ---------- Класс документа ----------
             class PDFDocument {
@@ -162,7 +209,6 @@
                     this.drawings = {};            // { pageNum: strokes[] }
                 }
 
-                // Комментарии
                 getCommentForPage(page) {
                     const c = this.comments.find(c => c.startPage <= page && c.endPage >= page);
                     return c ? c.text : '';
@@ -176,7 +222,6 @@
                     this.saveToLocalStorage();
                 }
 
-                // Рисунки
                 getDrawings(page) {
                     return this.drawings[page] || [];
                 }
@@ -184,11 +229,6 @@
                 addStroke(page, stroke) {
                     if (!this.drawings[page]) this.drawings[page] = [];
                     this.drawings[page].push(stroke);
-                    this.saveToLocalStorage();
-                }
-
-                clearDrawings(page) {
-                    delete this.drawings[page];
                     this.saveToLocalStorage();
                 }
 
@@ -292,7 +332,7 @@
                 return 1;
             }
 
-            // Отрисовка всех штрихов для страницы
+            // Отрисовка всех штрихов на canvas
             function redrawDrawings(canvas, strokes) {
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -317,18 +357,22 @@
                     const pageNum = idx+1;
                     const wrapper = document.createElement('div');
                     wrapper.className = 'pdf-page-wrapper';
-                    wrapper.style.width = pageData.width + 'px';
-                    wrapper.style.height = pageData.height + 'px';
 
+                    // Устанавливаем соотношение сторон через padding-bottom (не обязательно, но canvas будет подстраиваться)
+                    // Но мы просто положим canvas внутрь, и через CSS width:100% он займёт всю ширину.
                     const pdfCanvas = document.createElement('canvas');
                     pdfCanvas.width = pageData.width;
                     pdfCanvas.height = pageData.height;
+                    pdfCanvas.style.width = '100%';
+                    pdfCanvas.style.height = 'auto';
                     wrapper.appendChild(pdfCanvas);
 
                     const drawCanvas = document.createElement('canvas');
                     drawCanvas.width = pageData.width;
                     drawCanvas.height = pageData.height;
                     drawCanvas.className = 'draw-canvas';
+                    drawCanvas.style.width = '100%';
+                    drawCanvas.style.height = 'auto';
                     drawCanvas.setAttribute('data-page', pageNum);
                     wrapper.appendChild(drawCanvas);
 
@@ -402,7 +446,7 @@
 
             function renderPageToDataURL(pdfDoc, pageNum, callback) {
                 pdfDoc.getPage(pageNum).then(page => {
-                    const viewport = page.getViewport({ scale: 1.5 });
+                    const viewport = page.getViewport({ scale: 1.5 }); // хорошее качество
                     const canvas = document.createElement('canvas');
                     canvas.width = viewport.width;
                     canvas.height = viewport.height;
@@ -473,7 +517,7 @@
             window.addEventListener('mouseup', () => { isResizing = false; });
             window.addEventListener('touchend', () => { isResizing = false; });
 
-            // ---------- Рисование ----------
+            // ---------- Рисование (только стилус) ----------
             function getCanvasFromTarget(target) {
                 if (target.classList.contains('draw-canvas')) {
                     return target;
@@ -481,62 +525,63 @@
                 return null;
             }
 
-            function startDrawing(e) {
+            function handlePointerDown(e) {
                 if (activeDocIndex === -1) return;
-                const canvas = getCanvasFromTarget(e.target);
-                if (!canvas) return;
 
-                e.preventDefault();
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                let clientX, clientY;
-                if (e.touches) {
-                    clientX = e.touches[0].clientX;
-                    clientY = e.touches[0].clientY;
-                } else {
-                    clientX = e.clientX;
-                    clientY = e.clientY;
+                // Запоминаем pointerId для стилуса, чтобы отслеживать только его
+                if (e.pointerType === 'pen') {
+                    // Если инструмент "ладонь" — не рисуем, просто игнорируем, стандартное поведение (скролл) будет
+                    if (currentTool === 'hand') {
+                        // Ничего не делаем, браузер сам прокрутит
+                        return;
+                    }
+                    // Начинаем рисование
+                    const canvas = getCanvasFromTarget(e.target);
+                    if (!canvas) return;
+
+                    e.preventDefault(); // предотвращаем скролл во время рисования
+
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    const x = (e.clientX - rect.left) * scaleX;
+                    const y = (e.clientY - rect.top) * scaleY;
+
+                    currentCanvas = canvas;
+                    isDrawing = true;
+                    const color = currentTool === 'eraser' ? '#FFFFFF' : brushColor; // для ластика цвет не важен, используем композицию
+                    currentStroke = {
+                        points: [{ x, y }],
+                        color: color,
+                        size: brushSize
+                    };
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = brushSize;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    if (currentTool === 'eraser') {
+                        ctx.globalCompositeOperation = 'destination-out'; // стираем
+                    } else {
+                        ctx.globalCompositeOperation = 'source-over';
+                    }
                 }
-                const x = (clientX - rect.left) * scaleX;
-                const y = (clientY - rect.top) * scaleY;
-
-                currentCanvas = canvas;
-                isDrawing = true;
-                const color = currentTool === 'eraser' ? '#FFFFFF' : brushColor;
-                currentStroke = {
-                    points: [{ x, y }],
-                    color: color,
-                    size: brushSize
-                };
-
-                // Начинаем путь на canvas
-                const ctx = canvas.getContext('2d');
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.strokeStyle = color;
-                ctx.lineWidth = brushSize;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
+                // Для пальца (touch) ничего не делаем, браузер скроллит
             }
 
-            function draw(e) {
-                if (!isDrawing || !currentCanvas || !currentStroke) return;
+            function handlePointerMove(e) {
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen') return;
+
                 e.preventDefault();
                 const canvas = currentCanvas;
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
                 const scaleY = canvas.height / rect.height;
-                let clientX, clientY;
-                if (e.touches) {
-                    clientX = e.touches[0].clientX;
-                    clientY = e.touches[0].clientY;
-                } else {
-                    clientX = e.clientX;
-                    clientY = e.clientY;
-                }
-                const x = (clientX - rect.left) * scaleX;
-                const y = (clientY - rect.top) * scaleY;
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
 
                 currentStroke.points.push({ x, y });
 
@@ -547,76 +592,93 @@
                 ctx.moveTo(x, y);
             }
 
-            function stopDrawing(e) {
-                if (!isDrawing || !currentCanvas || !currentStroke) return;
+            function handlePointerUp(e) {
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen') return;
                 e.preventDefault();
+
                 isDrawing = false;
 
-                // Сохраняем штрих в документ
-                if (activeDocIndex !== -1 && currentStroke.points.length > 1) {
+                if (currentStroke.points.length > 1) {
                     const page = parseInt(currentCanvas.dataset.page);
                     const doc = documents[activeDocIndex];
                     doc.addStroke(page, currentStroke);
                 }
+
+                // Сбрасываем композицию для следующего раза
+                const ctx = currentCanvas.getContext('2d');
+                ctx.globalCompositeOperation = 'source-over';
+
                 currentStroke = null;
                 currentCanvas = null;
             }
 
-            // Подписка на события рисования
-            document.addEventListener('mousedown', startDrawing);
-            document.addEventListener('mousemove', draw);
-            document.addEventListener('mouseup', stopDrawing);
-            document.addEventListener('mouseleave', stopDrawing);
-            document.addEventListener('touchstart', startDrawing, { passive: false });
-            document.addEventListener('touchmove', draw, { passive: false });
-            document.addEventListener('touchend', stopDrawing);
-            document.addEventListener('touchcancel', stopDrawing);
+            // Добавляем слушатели pointer events
+            document.addEventListener('pointerdown', handlePointerDown);
+            document.addEventListener('pointermove', handlePointerMove);
+            document.addEventListener('pointerup', handlePointerUp);
+            document.addEventListener('pointercancel', handlePointerUp);
 
             // ---------- Инструменты ----------
             brushBtn.addEventListener('click', () => {
                 currentTool = 'brush';
                 brushBtn.classList.add('active');
                 eraserBtn.classList.remove('active');
+                handBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
             });
             eraserBtn.addEventListener('click', () => {
                 currentTool = 'eraser';
                 eraserBtn.classList.add('active');
                 brushBtn.classList.remove('active');
+                handBtn.classList.remove('active');
+                brushSizePicker.classList.remove('show');
+            });
+            handBtn.addEventListener('click', () => {
+                currentTool = 'hand';
+                handBtn.classList.add('active');
+                brushBtn.classList.remove('active');
+                eraserBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
             });
 
-            // Вызов палитры (по клику на кисть/ластик - показываем окно)
-            brushBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicker(); });
+            // Показ всплывающего окна с позиционированием
+            function showPicker(btn) {
+                const rect = btn.getBoundingClientRect();
+                let top = rect.bottom + window.scrollY;
+                let left = rect.left + window.scrollX;
+
+                // Корректируем, чтобы окно не выходило за правый край
+                const pickerWidth = brushSizePicker.offsetWidth;
+                if (left + pickerWidth > window.innerWidth) {
+                    left = window.innerWidth - pickerWidth - 10;
+                }
+                // Корректируем, если уходит за нижний край
+                const pickerHeight = brushSizePicker.offsetHeight;
+                if (top + pickerHeight > window.innerHeight) {
+                    top = rect.top - pickerHeight - 10;
+                }
+
+                brushSizePicker.style.top = top + 'px';
+                brushSizePicker.style.left = left + 'px';
+                brushSizePicker.classList.add('show');
+            }
+
+            brushBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicker(brushBtn); });
             brushBtn.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 1) {
-                    let timer = setTimeout(showPicker, 500);
+                    let timer = setTimeout(() => showPicker(brushBtn), 500);
                     brushBtn.addEventListener('touchend', () => clearTimeout(timer), { once: true });
                 }
             });
-            eraserBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicker(); });
+            eraserBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicker(eraserBtn); });
             eraserBtn.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 1) {
-                    let timer = setTimeout(showPicker, 500);
+                    let timer = setTimeout(() => showPicker(eraserBtn), 500);
                     eraserBtn.addEventListener('touchend', () => clearTimeout(timer), { once: true });
                 }
             });
 
-            function showPicker() {
-                const rect = (currentTool === 'brush' ? brushBtn : eraserBtn).getBoundingClientRect();
-                brushSizePicker.style.top = rect.bottom + 'px';
-                brushSizePicker.style.left = rect.left + 'px';
-                brushSizePicker.classList.toggle('show');
-            }
-
-            // Палитра цветов
-            colorPalette.querySelectorAll('.color-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    brushColor = item.style.backgroundColor;
-                    colorPalette.querySelectorAll('.color-item').forEach(i => i.classList.remove('selected'));
-                    item.classList.add('selected');
-                });
-            });
+            // Слайдер размера
             sizeSlider.addEventListener('input', () => {
                 brushSize = parseInt(sizeSlider.value);
                 sizeValue.textContent = brushSize;
@@ -638,7 +700,6 @@
                         total += localStorage[key].length * 2;
                         if (key.startsWith('pdf_data_')) {
                             const docId = key.substring(9);
-                            // Ищем в открытых документах
                             const doc = documents.find(d => d.id === docId);
                             if (doc) {
                                 fileMap.set(doc.name, (fileMap.get(doc.name) || 0) + 1);
@@ -667,7 +728,6 @@
                                 }
                             }
                         }
-                        // Обновляем документы
                         documents.forEach(doc => {
                             if (doc.name === fname) {
                                 doc.comments = [];
@@ -697,7 +757,6 @@
 
             // Инициализация
             brushBtn.classList.add('active');
-            colorPalette.querySelector('.color-item[style*="FF0000"]').classList.add('selected');
             pageIndicator.style.display = 'none';
         })();
     </script>
