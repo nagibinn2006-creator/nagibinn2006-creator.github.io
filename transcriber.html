@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>M4A в текст — Whisper WASM</title>
     <style>
+        /* Стили (без изменений, можно скопировать из предыдущего ответа) */
         * {
             box-sizing: border-box;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -172,6 +173,8 @@
             color: #5e4b1c;
         }
     </style>
+    <!-- ПРАВИЛЬНОЕ ПОДКЛЮЧЕНИЕ: используем UMD-версию -->
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js"></script>
 </head>
 <body>
     <div class="card">
@@ -215,9 +218,6 @@
         </div>
     </div>
 
-    <!-- Подключаем Transformers.js (использует ONNX Runtime Web – WASM) -->
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js"></script>
-
     <script>
         (function() {
             // Глобальные переменные
@@ -239,9 +239,16 @@
             let isModelLoading = false;
             let isTranscribing = false;
 
+            // Проверка, что Transformers загрузился
+            if (typeof Transformers === 'undefined') {
+                setStatus('❌ Ошибка: библиотека Transformers не загрузилась. Проверьте интернет-соединение.', true);
+                console.error('Transformers is not defined. CDN may be blocked.');
+            } else {
+                console.log('Transformers loaded successfully');
+            }
+
             // ---- Вспомогательные функции ----
 
-            // Обновление статуса
             function setStatus(msg, isError = false) {
                 statusDiv.textContent = msg;
                 if (isError) {
@@ -253,7 +260,6 @@
                 }
             }
 
-            // Прогресс
             function setProgress(percent, text) {
                 if (percent >= 0) {
                     progressBar.style.display = 'block';
@@ -264,7 +270,6 @@
                 progressText.textContent = text || '';
             }
 
-            // Сброс состояния
             function resetUI() {
                 selectedFile = null;
                 fileInput.value = '';
@@ -277,15 +282,12 @@
                 modelWarning.style.display = 'block';
             }
 
-            // Активация кнопки при наличии файла
             function enableButtonIfFile() {
                 transcribeBtn.disabled = !selectedFile || isModelLoading || isTranscribing;
             }
 
-            // Обработка выбранного файла
             function handleFile(file) {
                 if (!file) return;
-                // Проверка типа
                 const validTypes = ['audio/mp4', 'audio/m4a', 'audio/x-m4a'];
                 if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.m4a')) {
                     setStatus('❌ Пожалуйста, выберите файл формата M4A', true);
@@ -295,10 +297,10 @@
                 fileNameSpan.textContent = file.name;
                 transcribeBtn.disabled = false;
                 setStatus(`✅ Файл готов: ${file.name}`);
-                modelWarning.style.display = 'block'; // напоминание о модели
+                modelWarning.style.display = 'block';
             }
 
-            // ---- Инициализация модели (ленивая, при первом нажатии) ----
+            // ---- Загрузка модели ----
             async function loadModel() {
                 if (pipeline) return pipeline;
                 if (isModelLoading) {
@@ -312,11 +314,10 @@
                 modelWarning.style.display = 'none';
 
                 try {
-                    // Используем маленькую английскую модель whisper-tiny.en
-                    // Для многоязычной замените на 'Xenova/whisper-tiny'
-                    const modelName = 'Xenova/whisper-tiny'; 
+                    // Используем английскую модель whisper-tiny.en (можно заменить на 'Xenova/whisper-tiny' для многоязычной)
+                    const modelName = 'Xenova/whisper-tiny.en';
 
-                    // Создаём pipeline с прогрессом
+                    // Создаём pipeline с отслеживанием прогресса
                     pipeline = await Transformers.pipeline('automatic-speech-recognition', modelName, {
                         progress_callback: (progress) => {
                             if (progress.status === 'downloading') {
@@ -342,28 +343,20 @@
                 }
             }
 
-            // ---- Преобразование M4A в аудиобуфер с ресемплингом до 16000 Гц моно ----
+            // ---- Декодирование и ресемплинг аудио ----
             async function decodeAndResample(file) {
                 setStatus('🔧 Декодирование аудио...');
                 setProgress(20, 'Чтение файла...');
 
-                // Читаем ArrayBuffer
                 const arrayBuffer = await file.arrayBuffer();
-
-                // Создаём AudioContext (注意: Safari требует webkitAudioContext, но AudioContext есть)
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 const audioCtx = new AudioContext();
 
                 setProgress(40, 'Декодирование M4A...');
-                // Декодируем
                 const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-                // Получаем данные
                 const channels = audioBuffer.numberOfChannels;
                 const sampleRate = audioBuffer.sampleRate;
-                const duration = audioBuffer.duration;
-
-                // Микшируем в моно (усредняем каналы)
                 const length = audioBuffer.length;
                 const monoData = new Float32Array(length);
 
@@ -377,23 +370,20 @@
                     }
                 }
 
-                // Ресемплинг до 16000 Гц, если необходимо
                 const targetRate = 16000;
                 if (sampleRate === targetRate) {
                     setProgress(70, 'Аудио готово (16000 Гц)');
                     return monoData;
                 }
 
-                // Простой метод ресемплинга (линейная интерполяция)
+                // Ресемплинг
                 const targetLength = Math.round(length * targetRate / sampleRate);
                 const resampled = new Float32Array(targetLength);
-
                 const step = sampleRate / targetRate;
                 for (let i = 0; i < targetLength; i++) {
                     const pos = i * step;
                     const index = Math.floor(pos);
                     const frac = pos - index;
-
                     if (index + 1 >= length) {
                         resampled[i] = monoData[length - 1];
                     } else {
@@ -415,31 +405,26 @@
                 setStatus('🔄 Подготовка...');
 
                 try {
-                    // 1. Убедимся, что модель загружена
                     const pipe = pipeline || await loadModel();
 
-                    // 2. Декодируем и ресемплируем аудио
                     const audioData = await decodeAndResample(selectedFile);
 
                     setStatus('🧠 Запуск распознавания (Whisper)...');
                     setProgress(80, 'Обработка речи...');
 
-                    // 3. Выполняем распознавание
-                    // Transformers.js принимает Float32Array с частотой 16000
                     const output = await pipe(audioData, {
-                        top_k: 0,            // параметры для генерации
+                        top_k: 0,
                         do_sample: false,
-                        chunk_length_s: 30,   // обрабатываем по 30 секунд
+                        chunk_length_s: 30,
                         stride_length_s: 5,
                         return_timestamps: false,
                         task: 'transcribe',
-                        language: 'ru',        // для английской модели; если многоязычная, можно 'ru' и т.д.
+                        language: 'en',
                     });
 
                     setProgress(100, 'Распознавание завершено');
                     const transcription = output.text;
 
-                    // 4. Отображаем результат
                     resultText.textContent = transcription || '[пусто]';
                     resultContainer.style.display = 'block';
                     setStatus('✅ Готово!');
@@ -455,8 +440,6 @@
             }
 
             // ---- Обработчики событий ----
-
-            // Drag & drop
             dropArea.addEventListener('click', () => fileInput.click());
 
             dropArea.addEventListener('dragover', (e) => {
@@ -480,10 +463,8 @@
                 if (file) handleFile(file);
             });
 
-            // Кнопка распознавания
             transcribeBtn.addEventListener('click', async () => {
                 if (!selectedFile) return;
-                // Если модель ещё не загружена, загружаем
                 if (!pipeline && !isModelLoading) {
                     try {
                         await loadModel();
@@ -491,19 +472,12 @@
                         return;
                     }
                 }
-                // Запускаем транскрибацию
                 await transcribe();
             });
 
-            // Сброс
-            resetBtn.addEventListener('click', () => {
-                resetUI();
-                // Не выгружаем модель из памяти (она остаётся), но можно перезагрузить страницу для полного сброса
-            });
+            resetBtn.addEventListener('click', resetUI);
 
-            // Инициализация
             resetUI();
-
         })();
     </script>
 </body>
