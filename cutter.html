@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>PDF Смарт-нарезка (без предпросмотра)</title>
-    <!-- pdf-lib для создания новых PDF -->
+    <title>PDF Смарт-нарезка + встроенный просмотр</title>
+    <!-- pdf-lib для нарезки -->
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
         * {
@@ -13,37 +13,72 @@
         }
         body {
             margin: 0;
-            padding: 16px;
-            min-height: 100vh;
-            background: #e5e7eb;
+            padding: 0;
+            height: 100vh;
             display: flex;
-            justify-content: center;
-            align-items: flex-start;
+            flex-direction: column;
+            background: #e5e7eb;
         }
-        .container {
-            max-width: 700px;
-            width: 100%;
+        /* Основной сплит-контейнер */
+        .split {
+            display: flex;
+            flex: 1;
+            flex-direction: column; /* вертикально на телефонах */
+            overflow: hidden;
+            gap: 2px;
+            background: #9ca3af;
+        }
+        /* Панели */
+        .pane {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             background: white;
-            border-radius: 32px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            padding: 24px 20px;
         }
-        h2 {
+        .controls-pane {
+            flex: 1.2;
+            background: #f9fafb;
+            border-bottom: 2px solid #d1d5db;
+            padding: 16px 12px;
+        }
+        .preview-pane {
+            flex: 2;
+            background: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            padding: 0; /* убираем отступы для вьюера */
+            height: 100%;
+        }
+        /* На iPad и больших экранах — горизонтально */
+        @media (min-width: 600px) {
+            .split {
+                flex-direction: row;
+            }
+            .controls-pane {
+                flex: 1;
+                border-bottom: none;
+                border-right: 2px solid #d1d5db;
+            }
+            .preview-pane {
+                flex: 2;
+            }
+        }
+
+        /* Элементы управления (левая панель) */
+        h3 {
             margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 1.8rem;
+            margin-bottom: 16px;
+            font-size: 1.3rem;
             font-weight: 600;
             color: #1f2937;
-            text-align: center;
         }
         .file-input-wrapper {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
         #fileInput {
             width: 100%;
-            padding: 14px;
-            background: #f3f4f6;
-            border-radius: 30px;
+            padding: 12px;
+            background: #e5e7eb;
+            border-radius: 12px;
             border: 1px solid #d1d5db;
             font-size: 16px;
         }
@@ -52,7 +87,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             max-height: 400px;
             overflow-y: auto;
             padding-right: 4px;
@@ -63,18 +98,18 @@
             flex-wrap: wrap;
             align-items: center;
             gap: 8px;
-            background: #f9fafb;
+            background: #ffffff;
             padding: 12px 10px;
-            border-radius: 20px;
+            border-radius: 16px;
             border: 1px solid #e2e8f0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .range-row input {
-            flex: 2 1 200px;
-            min-width: 150px;
-            padding: 12px 16px;
+            flex: 2 1 180px;
+            min-width: 140px;
+            padding: 12px 14px;
             border: 1px solid #cbd5e1;
-            border-radius: 40px;
+            border-radius: 30px;
             font-size: 16px;
             background: white;
             transition: 0.2s;
@@ -85,12 +120,12 @@
             box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
         }
         .range-row .name-input {
-            flex: 1 1 150px;
+            flex: 1 1 140px;
         }
         .remove-row {
             flex: 0 0 44px;
             height: 44px;
-            border-radius: 40px;
+            border-radius: 30px;
             border: none;
             background: #fee2e2;
             color: #b91c1c;
@@ -112,12 +147,12 @@
             display: flex;
             flex-wrap: wrap;
             gap: 12px;
-            margin-bottom: 24px;
+            margin: 20px 0 10px;
         }
         button {
-            padding: 14px 22px;
+            padding: 14px 20px;
             border: none;
-            border-radius: 50px;
+            border-radius: 40px;
             font-size: 17px;
             font-weight: 500;
             background: #e5e7eb;
@@ -136,7 +171,7 @@
             background: #3b82f6;
             color: white;
             font-weight: 600;
-            box-shadow: 0 4px 8px rgba(59,130,246,0.3);
+            box-shadow: 0 4px 6px rgba(59,130,246,0.3);
         }
         #sliceBtn:active {
             background: #2563eb;
@@ -149,7 +184,7 @@
         /* Блок ссылок для скачивания */
         #downloadLinks {
             margin-top: 20px;
-            padding: 16px 14px;
+            padding: 16px 12px;
             background: #e0f2fe;
             border-radius: 24px;
             border: 1px solid #7dd3fc;
@@ -164,53 +199,101 @@
             text-decoration: none;
             font-weight: 500;
             font-size: 16px;
-            transition: 0.1s;
         }
         .download-link:active {
             background: #1e3a8a;
         }
-        .info-message {
-            color: #6b7280;
-            text-align: center;
-            padding: 20px;
+
+        /* Предпросмотр через EMBED (полноценный вьюер) */
+        .preview-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #f3f4f6;
+        }
+        .preview-header {
+            padding: 8px 12px;
+            background: #f3f4f6;
+            border-bottom: 1px solid #d1d5db;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
         }
         .total-pages-badge {
             background: #dbeafe;
-            padding: 8px 16px;
-            border-radius: 40px;
-            font-size: 15px;
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 14px;
             display: inline-block;
-            margin-bottom: 16px;
+        }
+        .viewer-note {
+            color: #4b5563;
+            font-size: 13px;
+            font-style: italic;
+        }
+        /* Используем embed для нативного просмотра с панелью инструментов */
+        #pdfEmbed {
+            width: 100%;
+            flex: 1;
+            border: none;
+            background: #ffffff;
+            min-height: 0; /* критично для flex-контейнера */
+        }
+        .placeholder-message {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #6b7280;
+            font-style: italic;
+            background: #f3f4f6;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>✂️ Смарт-нарезка PDF</h2>
+    <div class="split">
+        <!-- Левая/верхняя панель управления -->
+        <div class="pane controls-pane">
+            <h3>✂️ Настройка нарезки</h3>
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept="application/pdf">
+            </div>
 
-        <div class="file-input-wrapper">
-            <input type="file" id="fileInput" accept="application/pdf">
+            <div id="rangesContainer">
+                <!-- Строки диапазонов будут добавляться сюда -->
+            </div>
+
+            <div class="action-buttons">
+                <button id="addRangeBtn">➕ Добавить</button>
+                <button id="sliceBtn">✂️ Нарезать</button>
+            </div>
+
+            <div id="downloadLinks">
+                <!-- Ссылки на готовые файлы -->
+            </div>
         </div>
 
-        <div id="pageInfo" class="total-pages-badge">⬅️ загрузите PDF</div>
-
-        <div id="rangesContainer">
-            <!-- Строки будут добавляться сюда -->
-        </div>
-
-        <div class="action-buttons">
-            <button id="addRangeBtn">➕ Добавить диапазон</button>
-            <button id="sliceBtn">✂️ Нарезать</button>
-        </div>
-
-        <div id="downloadLinks">
-            <!-- Ссылки на готовые файлы -->
+        <!-- Правая/нижняя панель предпросмотра -->
+        <div class="pane preview-pane">
+            <div class="preview-container">
+                <div class="preview-header">
+                    <span class="total-pages-badge" id="pageCountBadge">⬅️ загрузите PDF</span>
+                    <span class="viewer-note">🔍 пролистывание + номера страниц</span>
+                </div>
+                <!-- Вместо iframe используем embed для полного контроля -->
+                <embed id="pdfEmbed" type="application/pdf" />
+                <!-- Запасной вариант, если embed не поддерживается -->
+                <div id="fallbackMessage" class="placeholder-message" style="display: none;">
+                    Ваш браузер не поддерживает встроенный просмотр PDF
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         (function() {
-            // --- Инициализация ---
             const { PDFDocument } = PDFLib;
 
             // Элементы DOM
@@ -219,33 +302,70 @@
             const addRangeBtn = document.getElementById('addRangeBtn');
             const sliceBtn = document.getElementById('sliceBtn');
             const downloadLinksDiv = document.getElementById('downloadLinks');
-            const pageInfo = document.getElementById('pageInfo');
+            const pageCountBadge = document.getElementById('pageCountBadge');
+            const pdfEmbed = document.getElementById('pdfEmbed');
+            const fallbackMessage = document.getElementById('fallbackMessage');
 
             // Состояние
             let loadedPdfDoc = null;       // pdf-lib документ
             let totalPages = 0;
             let createdUrls = [];
+            let previewUrl = null;          // blob URL для embed
 
             // --- Вспомогательные функции ---
             function revokeAllUrls() {
                 createdUrls.forEach(url => URL.revokeObjectURL(url));
                 createdUrls = [];
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
             }
 
             function clearDownloadLinks() {
                 downloadLinksDiv.innerHTML = '';
-                revokeAllUrls();
             }
 
             function updatePageInfo() {
                 if (totalPages > 0) {
-                    pageInfo.textContent = `📄 Всего страниц: ${totalPages}`;
+                    pageCountBadge.textContent = `📄 Всего страниц: ${totalPages}`;
                 } else {
-                    pageInfo.textContent = `⬅️ загрузите PDF`;
+                    pageCountBadge.textContent = `⬅️ загрузите PDF`;
                 }
             }
 
-            // --- Парсинг строки диапазонов (пример: "5-15, 1, 3-7") ---
+            // Очистка предпросмотра
+            function clearPreview() {
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
+                pdfEmbed.src = ''; // очищаем embed
+                fallbackMessage.style.display = 'none';
+                pdfEmbed.style.display = 'block';
+            }
+
+            // Показать PDF в embed с полным набором инструментов
+            function showPreview(blob) {
+                clearPreview();
+                const url = URL.createObjectURL(blob);
+                previewUrl = url;
+                
+                // Добавляем параметры для отображения панели инструментов и навигации
+                // #toolbar=1 - показывает панель инструментов
+                // #navpanes=1 - показывает навигацию по страницам
+                // #scrollbar=1 - показывает скролл
+                // #view=FitV - вертикальная прокрутка
+                pdfEmbed.src = url + '#toolbar=1&navpanes=1&scrollbar=1&view=FitV&page=1';
+                
+                // Проверяем, поддерживается ли embed (на случай ошибки)
+                pdfEmbed.onerror = function() {
+                    pdfEmbed.style.display = 'none';
+                    fallbackMessage.style.display = 'flex';
+                };
+            }
+
+            // --- Парсинг строки диапазонов ---
             function parseRangeString(rangeStr, maxPage) {
                 if (!rangeStr || rangeStr.trim() === '') {
                     throw new Error('Пустая строка диапазона');
@@ -284,7 +404,7 @@
                 return pages;
             }
 
-            // --- Добавление новой строки диапазона ---
+            // --- Добавление новой строки ---
             function addRangeRow(rangeValue = '', nameValue = '') {
                 const row = document.createElement('div');
                 row.className = 'range-row';
@@ -305,10 +425,7 @@
                 removeBtn.className = 'remove-row';
                 removeBtn.innerHTML = '✕';
                 removeBtn.setAttribute('aria-label', 'Удалить');
-                removeBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    row.remove();
-                });
+                removeBtn.addEventListener('click', () => row.remove());
 
                 row.appendChild(rangeInput);
                 row.appendChild(nameInput);
@@ -316,7 +433,7 @@
                 rangesContainer.appendChild(row);
             }
 
-            // Добавляем одну строку по умолчанию
+            // Инициализация одной строки
             addRangeRow('1-3', 'часть_1');
 
             // --- Загрузка PDF ---
@@ -324,20 +441,29 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
+                // Очищаем старые данные
                 clearDownloadLinks();
+                revokeAllUrls(); // очистит и previewUrl
                 loadedPdfDoc = null;
                 totalPages = 0;
                 updatePageInfo();
+                clearPreview();
 
                 try {
                     const arrayBuffer = await file.arrayBuffer();
-                    // Загружаем документ через pdf-lib
+
+                    // Загружаем для нарезки
                     loadedPdfDoc = await PDFDocument.load(arrayBuffer);
                     totalPages = loadedPdfDoc.getPageCount();
                     updatePageInfo();
+
+                    // Для предпросмотра показываем сам файл с полным интерфейсом
+                    const originalBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
+                    showPreview(originalBlob);
+
                 } catch (error) {
                     console.error('Ошибка загрузки PDF:', error);
-                    pageInfo.textContent = '❌ Ошибка загрузки файла';
+                    pageCountBadge.textContent = '❌ Ошибка загрузки';
                 }
             });
 
@@ -354,10 +480,13 @@
                     return;
                 }
 
-                // Блокируем кнопку на время обработки
                 sliceBtn.disabled = true;
                 sliceBtn.textContent = '⏳ Нарезка...';
-                clearDownloadLinks();
+                // Очищаем старые ссылки (но preview оставляем)
+                downloadLinksDiv.innerHTML = '';
+                // Отзываем только созданные ранее ссылки скачивания, preview не трогаем
+                createdUrls.forEach(url => URL.revokeObjectURL(url));
+                createdUrls = [];
 
                 const jobs = [];
                 for (let row of rows) {
@@ -375,7 +504,6 @@
 
                     try {
                         const pageNumbers = parseRangeString(rangeStr, totalPages);
-                        // Преобразуем в 0-индекс
                         const pageIndices = pageNumbers.map(p => p - 1);
                         jobs.push({
                             indices: pageIndices,
@@ -389,7 +517,6 @@
                     }
                 }
 
-                // Создаём новые PDF
                 try {
                     for (let i = 0; i < jobs.length; i++) {
                         const job = jobs[i];
@@ -412,11 +539,10 @@
                         link.download = finalFileName;
                         link.textContent = `📎 ${finalFileName}`;
                         link.className = 'download-link';
-                        link.target = '_blank'; // для мобильных устройств
+                        link.target = '_blank';
                         downloadLinksDiv.appendChild(link);
                     }
 
-                    // Добавляем заголовок, если есть результаты
                     if (jobs.length > 0) {
                         const title = document.createElement('p');
                         title.textContent = '✅ Готовые файлы:';
@@ -437,6 +563,7 @@
             addRangeBtn.addEventListener('click', () => {
                 addRangeRow('', '');
             });
+
         })();
     </script>
 </body>
