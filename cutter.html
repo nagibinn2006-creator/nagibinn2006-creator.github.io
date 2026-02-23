@@ -202,24 +202,25 @@
             background: #1e3a8a;
         }
         /* Предпросмотр страниц */
-        .preview-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 10px 5px;
-        }
-        .preview-container canvas {
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            background: white;
-            width: auto;
-            height: auto;
-            max-width: 100%;
-            border: 2px solid white;
-            transition: 0.1s;
-        }
+       .preview-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 10px 5px;
+}
+.preview-container canvas {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    background: white;
+    width: 100%;          /* холст занимает всю ширину родителя */
+    height: auto;         /* высота подбирается пропорционально */
+    max-width: 100%;
+    border: 2px solid white;
+    transition: 0.1s;
+    object-fit: contain;  /* сохраняет пропорции, если контейнер изменит размер */
+}
         .info-message {
             text-align: center;
             color: #6b7280;
