@@ -57,7 +57,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            /* touch-action: none; удалено для прокрутки пальцем */
+            /* touch-action будет управляться динамически */
         }
         #resizer { width: 8px; background: #aaa; cursor: col-resize; transition: background 0.2s; }
         #resizer:hover, #resizer:active { background: #1976D2; }
@@ -202,6 +202,18 @@
             }
             generateColorPalette();
 
+            // ---------- Управление touch-action для canvas (блокировка прокрутки при рисовании) ----------
+            function updateCanvasTouchAction() {
+                const canvases = document.querySelectorAll('.draw-canvas');
+                canvases.forEach(canvas => {
+                    if (currentTool === 'brush' || currentTool === 'eraser') {
+                        canvas.style.touchAction = 'none';
+                    } else {
+                        canvas.style.touchAction = '';
+                    }
+                });
+            }
+
             // ---------- Парсинг строки диапазона ----------
             function parseRangeString(str) {
                 if (!str.trim()) return [];
@@ -241,10 +253,8 @@
                 }
 
                 // Добавить/обновить комментарий (простая стратегия: заменяем все комментарии для этих страниц на новый)
-                // Для упрощения будем хранить массив и просто добавлять новый, а при отображении объединять.
                 setComment(pagesArray, html) {
-                    // Удаляем старые комментарии, которые имеют пересечение с указанными страницами (или проще: добавляем новый, а старые оставляем - тогда будет несколько)
-                    // Но для удобства сделаем так: удаляем все комментарии, которые покрывают любую из указанных страниц, и добавляем новый.
+                    // Удаляем старые комментарии, которые имеют пересечение с указанными страницами
                     this.comments = this.comments.filter(c => !c.pages.some(p => pagesArray.includes(p)));
                     if (html.trim() !== '') {
                         this.comments.push({ pages: pagesArray, html: html });
@@ -429,6 +439,9 @@
                 updateCommentUIForPage(1);
                 pageIndicator.style.display = 'block';
                 pageIndicator.textContent = 'Стр. 1';
+
+                // Обновляем touch-action для новых canvas
+                updateCanvasTouchAction();
             }
 
             function updateCommentUIForPage(page) {
@@ -504,6 +517,8 @@
 
             commentsContent.addEventListener('input', onCommentChange);
             commentRange.addEventListener('change', onCommentChange);
+            // Добавляем обработчик blur, чтобы сохранять при клике вне поля диапазона
+            commentRange.addEventListener('blur', onCommentChange);
 
             // Вставка изображения
             addImageBtn.addEventListener('click', () => {
@@ -658,6 +673,7 @@
                 eraserBtn.classList.remove('active');
                 handBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
             });
             eraserBtn.addEventListener('click', () => {
                 currentTool = 'eraser';
@@ -665,6 +681,7 @@
                 brushBtn.classList.remove('active');
                 handBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
             });
             handBtn.addEventListener('click', () => {
                 currentTool = 'hand';
@@ -672,6 +689,7 @@
                 brushBtn.classList.remove('active');
                 eraserBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
             });
 
             // Показ всплывающего окна
@@ -785,6 +803,7 @@
             // Инициализация
             brushBtn.classList.add('active');
             pageIndicator.style.display = 'none';
+            updateCanvasTouchAction(); // на случай, если есть canvas
         })();
     </script>
 </body>
