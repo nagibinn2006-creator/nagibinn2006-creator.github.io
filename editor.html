@@ -7,8 +7,12 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f0f2f5; overflow: hidden; }
-        /* Синяя панель инструментов (теперь со всеми кнопками) */
-        #toolbar { background: #1976D2; color: white; padding: 8px; display: flex; align-items: center; gap: 5px; overflow-x: auto; white-space: nowrap; flex-wrap: wrap; }
+        /* Главное меню (три большие кнопки) */
+        #mainMenu { display: flex; gap: 15px; padding: 20px; background: #fff; border-bottom: 1px solid #ccc; justify-content: center; }
+        .big-btn { background: #4CAF50; color: white; border: none; padding: 15px 30px; border-radius: 10px; font-size: 18px; cursor: pointer; }
+        .big-btn:active { opacity: 0.8; }
+        /* Синяя панель инструментов (появляется при открытом документе) */
+        #toolbar { background: #1976D2; color: white; padding: 8px; display: none; align-items: center; gap: 5px; overflow-x: auto; white-space: nowrap; flex-wrap: wrap; position: sticky; top: 0; z-index: 10; }
         .tab-container { display: flex; flex: 1; gap: 5px; overflow-x: auto; min-width: 150px; }
         .tab { background: rgba(255,255,255,0.2); padding: 8px 12px; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
         .tab.active { background: rgba(255,255,255,0.4); font-weight: bold; }
@@ -25,9 +29,9 @@
         .slider-container { display: flex; flex-direction: column; gap: 5px; }
         #saveBtn { margin-left: auto; }
         /* Основная область */
-        #mainContainer { flex: 1; display: flex; overflow: hidden; position: relative; }
+        #mainContainer { flex: 1; display: none; overflow: hidden; position: relative; }
         #pdfPanel { background: #e9ecef; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: 10px; transition: width 0.05s; }
-        #pdfContainer { position: relative; transform-origin: 0 0; will-change: transform; }
+        #pdfContainer { transform-origin: 0 0; will-change: transform; }
         .pdf-page-wrapper { position: relative; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); background: white; }
         .pdf-page-wrapper canvas { display: block; width: 100%; height: auto; pointer-events: none; }
         .draw-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
@@ -45,7 +49,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
-    <!-- Синяя панель инструментов (все кнопки здесь) -->
+    <!-- Главное меню (три большие кнопки) -->
+    <div id="mainMenu">
+        <button class="big-btn" id="mainOpenJsonBtn">📂 Открыть JSON</button>
+        <button class="big-btn" id="mainConvertPdfBtn">📄 PDF → JSON</button>
+        <button class="big-btn" id="mainImportJsonBtn">📥 JSON → PDF</button>
+    </div>
+
+    <!-- Синяя панель инструментов (появляется при открытом документе) -->
     <div id="toolbar">
         <div class="tab-container" id="tabContainer"></div>
         
@@ -61,7 +72,7 @@
         <button class="tool-icon" id="eraserBtn" title="Ластик (стилус)">🧽</button>
         <button class="tool-icon" id="handBtn" title="Ладонь (перемещение)">✋</button>
         
-        <!-- Выпадающее меню размера/цвета (прикреплено к кнопке кисти/ластика) -->
+        <!-- Выпадающее меню размера/цвета -->
         <div id="brushSizePicker" class="size-picker">
             <div class="color-palette" id="colorPalette">
                 <div class="color-item" style="background:#FF0000;"></div>
@@ -113,20 +124,20 @@
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
             // ---------- Состояние ----------
-            const documents = [];                // массив документов
+            const documents = [];
             let activeDocIndex = -1;
-            let currentTool = 'brush';            // brush, eraser, hand
+            let currentTool = 'brush';
             let brushColor = '#FF0000';
             let brushSize = 4;
             let eraserSize = 4;
 
-            // Масштаб и смещение
+            // Масштаб и смещение (трансформация контейнера)
             let scale = 1;
-            let panX = 0, panY = 0;
-            let isPanning = false;
-            let lastPanX, lastPanY;
+            let initialDistance = 0;
+            let initialScale = 1;
 
             // Элементы
+            const mainMenu = document.getElementById('mainMenu');
             const toolbar = document.getElementById('toolbar');
             const mainContainer = document.getElementById('mainContainer');
             const tabContainer = document.getElementById('tabContainer');
@@ -139,7 +150,12 @@
             const pdfPanel = document.getElementById('pdfPanel');
             const commentsPanel = document.getElementById('commentsPanel');
 
-            // Кнопки
+            // Кнопки главного меню (большие)
+            const mainOpenJsonBtn = document.getElementById('mainOpenJsonBtn');
+            const mainConvertPdfBtn = document.getElementById('mainConvertPdfBtn');
+            const mainImportJsonBtn = document.getElementById('mainImportJsonBtn');
+
+            // Кнопки панели инструментов
             const openJsonBtn = document.getElementById('openJsonBtn');
             const convertPdfBtn = document.getElementById('convertPdfBtn');
             const importJsonBtn = document.getElementById('importJsonBtn');
@@ -163,9 +179,8 @@
             class PDFDocument {
                 constructor(name = 'Документ') {
                     this.name = name;
-                    this.pages = [];        // { pdfDataURL, width, height, drawingDataURL }
-                    this.comments = [];      // { startPage, endPage, text }
-                    this.currentPage = 1;     // не используется для скролла, но пригодится
+                    this.pages = [];
+                    this.comments = [];
                 }
 
                 getCommentForPage(page) {
@@ -174,15 +189,13 @@
                 }
 
                 setCommentForPage(page, text, start, end) {
-                    // Удаляем старый комментарий, перекрывающий диапазон? Для простоты заменим все вхождения для этого диапазона
-                    // Но лучше хранить как есть: при редактировании диапазона создаём новый или обновляем
-                    const existing = this.comments.find(c => c.startPage <= page && c.endPage >= page);
-                    if (existing) {
+                    const existingIndex = this.comments.findIndex(c => c.startPage <= page && c.endPage >= page);
+                    if (existingIndex !== -1) {
+                        const existing = this.comments[existingIndex];
                         if (existing.startPage === start && existing.endPage === end) {
                             existing.text = text;
                         } else {
-                            // Заменяем
-                            this.comments = this.comments.filter(c => !(c.startPage <= page && c.endPage >= page));
+                            this.comments.splice(existingIndex, 1);
                             this.comments.push({ startPage: start, endPage: end, text });
                         }
                     } else {
@@ -201,11 +214,22 @@
                 }
             }
 
-            // ---------- Вспомогательные функции ----------
-            function showMainInterface() {
-                // уже видно
+            // ---------- Переключение режимов отображения ----------
+            function showMainMenu() {
+                mainMenu.style.display = 'flex';
+                toolbar.style.display = 'none';
+                mainContainer.style.display = 'none';
+                pageIndicator.style.display = 'none';
             }
 
+            function showDocumentInterface() {
+                mainMenu.style.display = 'none';
+                toolbar.style.display = 'flex';
+                mainContainer.style.display = 'flex';
+                pageIndicator.style.display = 'block';
+            }
+
+            // ---------- Работа с документами ----------
             function renderTabs() {
                 tabContainer.innerHTML = '';
                 documents.forEach((doc, i) => {
@@ -235,7 +259,7 @@
                 if (documents.length === 0) {
                     activeDocIndex = -1;
                     pdfContainer.innerHTML = '';
-                    pageIndicator.style.display = 'none';
+                    showMainMenu();
                 } else {
                     if (index <= activeDocIndex) activeDocIndex = Math.max(0, activeDocIndex-1);
                     switchToDocument(activeDocIndex);
@@ -256,7 +280,6 @@
             function saveCurrentDrawings() {
                 if (activeDocIndex === -1) return;
                 const doc = documents[activeDocIndex];
-                // Сохраняем каждый canvas рисунка
                 document.querySelectorAll('.pdf-page-wrapper').forEach((wrapper, idx) => {
                     const drawCanvas = wrapper.querySelector('.draw-canvas');
                     if (drawCanvas) {
@@ -272,7 +295,7 @@
                     const pageNum = idx+1;
                     const wrapper = document.createElement('div');
                     wrapper.className = 'pdf-page-wrapper';
-                    wrapper.style.width = pageData.width + 'px'; // фиксированная ширина
+                    wrapper.style.width = pageData.width + 'px';
                     wrapper.style.height = pageData.height + 'px';
 
                     const pdfImg = document.createElement('canvas');
@@ -307,9 +330,12 @@
                     }
                 });
 
-                // Устанавливаем комментарии для первой страницы (по умолчанию)
+                // Сброс масштаба при загрузке нового документа
+                scale = 1;
+                pdfContainer.style.transform = `scale(${scale})`;
+
+                // Устанавливаем комментарии для первой страницы
                 updateCommentUIForPage(1);
-                pageIndicator.style.display = 'block';
                 pageIndicator.textContent = 'Стр. 1';
             }
 
@@ -318,7 +344,6 @@
                 const doc = documents[activeDocIndex];
                 const comment = doc.getCommentForPage(page);
                 commentsText.value = comment;
-                // Устанавливаем диапазон: ищем комментарий для этой страницы
                 const c = doc.comments.find(c => c.startPage <= page && c.endPage >= page);
                 if (c) {
                     commentFrom.value = c.startPage;
@@ -354,7 +379,7 @@
 
             function renderPageToDataURL(pdfDoc, pageNum, callback) {
                 pdfDoc.getPage(pageNum).then(page => {
-                    const viewport = page.getViewport({ scale: 1.5 }); // чуть выше разрешение
+                    const viewport = page.getViewport({ scale: 1.5 });
                     const canvas = document.createElement('canvas');
                     canvas.width = viewport.width;
                     canvas.height = viewport.height;
@@ -364,8 +389,21 @@
                 });
             }
 
-            // ---------- Обработчики главного меню ----------
-            openJsonBtn.addEventListener('click', () => openJsonInput.click());
+            // ---------- Обработчики главного меню (большие кнопки) ----------
+            function handleOpenJson() { openJsonInput.click(); }
+            function handleConvertPdf() { convertPdfInput.click(); }
+            function handleImportJson() { importJsonInput.click(); }
+
+            mainOpenJsonBtn.addEventListener('click', handleOpenJson);
+            mainConvertPdfBtn.addEventListener('click', handleConvertPdf);
+            mainImportJsonBtn.addEventListener('click', handleImportJson);
+
+            // Дублируем те же обработчики для иконок в панели инструментов
+            openJsonBtn.addEventListener('click', handleOpenJson);
+            convertPdfBtn.addEventListener('click', handleConvertPdf);
+            importJsonBtn.addEventListener('click', handleImportJson);
+
+            // Обработка загрузки файлов
             openJsonInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -386,7 +424,7 @@
                         documents.push(doc);
                         renderTabs();
                         switchToDocument(documents.length-1);
-                        showMainInterface();
+                        showDocumentInterface();
                     } catch (err) {
                         alert('Ошибка чтения JSON: ' + err.message);
                     }
@@ -395,7 +433,6 @@
                 openJsonInput.value = '';
             });
 
-            convertPdfBtn.addEventListener('click', () => convertPdfInput.click());
             convertPdfInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -405,12 +442,11 @@
                     documents.push(doc);
                     renderTabs();
                     switchToDocument(documents.length-1);
-                    showMainInterface();
+                    showDocumentInterface();
                 });
                 convertPdfInput.value = '';
             });
 
-            importJsonBtn.addEventListener('click', () => importJsonInput.click());
             importJsonInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -467,7 +503,7 @@
                 brushSizePicker.classList.remove('show');
             });
 
-            // Выбор цвета/размера (по долгому нажатию на кисть/ластик)
+            // Выбор цвета/размера (долгое нажатие)
             function showPicker(picker, btn) {
                 const rect = btn.getBoundingClientRect();
                 picker.style.top = rect.bottom + 'px';
@@ -477,7 +513,6 @@
             brushBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicker(brushSizePicker, brushBtn); });
             brushBtn.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 1 && e.target === brushBtn) {
-                    // долгое нажатие - через таймер
                     let timer = setTimeout(() => showPicker(brushSizePicker, brushBtn), 500);
                     brushBtn.addEventListener('touchend', () => clearTimeout(timer), { once: true });
                 }
@@ -504,7 +539,7 @@
                 else eraserSize = parseInt(sizeSlider.value);
             });
 
-            // ---------- Рисование ----------
+            // ---------- Рисование с учётом трансформации ----------
             function getCanvasAndContextFromTarget(target) {
                 if (target.classList.contains('draw-canvas')) {
                     return { canvas: target, ctx: target.getContext('2d'), page: target.dataset.page };
@@ -512,22 +547,26 @@
                 return null;
             }
 
+            function transformPoint(clientX, clientY, canvasElement) {
+                const rect = canvasElement.getBoundingClientRect();
+                // Координаты внутри элемента в пикселях экрана
+                const x = (clientX - rect.left) / scale; // масштаб применён к контейнеру, поэтому делим
+                const y = (clientY - rect.top) / scale;
+                // Переводим в координаты canvas (пиксели изображения)
+                const canvasX = x * (canvasElement.width / rect.width);
+                const canvasY = y * (canvasElement.height / rect.height);
+                return { x: canvasX, y: canvasY };
+            }
+
             function startDrawing(e) {
                 if (activeDocIndex === -1) return;
-                // Проверяем тип указателя: если стилус (pen) или мышь, то рисуем; если палец и не ладонь - игнорируем (прокрутка)
-                const pointerType = e.pointerType; // для событий pointer, но у нас touch
-                // Используем touchType: для стилуса в Safari touchType = 'stylus'
-                if (e.touches) {
-                    const touch = e.touches[0];
-                    if (touch.touchType === 'stylus' || (currentTool !== 'hand' && touch.touchType !== 'stylus' && e.touches.length === 1)) {
-                        // Если стилус - рисуем. Если не стилус и не ладонь - не рисуем (прокрутка)
-                        if (touch.touchType !== 'stylus' && currentTool !== 'hand') {
-                            // Разрешаем стандартную прокрутку
-                            return;
-                        }
-                    } else {
-                        return; // палец не рисуем
+                if (e.pointerType !== 'pen') {
+                    if (currentTool === 'hand') {
+                        isPanning = true;
+                        lastPanX = e.clientX;
+                        lastPanY = e.clientY;
                     }
+                    return;
                 }
 
                 const target = e.target;
@@ -535,19 +574,7 @@
                 if (!canvasInfo) return;
 
                 e.preventDefault();
-                const rect = target.getBoundingClientRect();
-                const scaleX = target.width / rect.width;
-                const scaleY = target.height / rect.height;
-                let clientX, clientY;
-                if (e.touches) {
-                    clientX = e.touches[0].clientX;
-                    clientY = e.touches[0].clientY;
-                } else {
-                    clientX = e.clientX;
-                    clientY = e.clientY;
-                }
-                const x = (clientX - rect.left) * scaleX;
-                const y = (clientY - rect.top) * scaleY;
+                const { x, y } = transformPoint(e.clientX, e.clientY, target);
 
                 canvasInfo.ctx.beginPath();
                 canvasInfo.ctx.moveTo(x, y);
@@ -560,8 +587,6 @@
                     canvasInfo.ctx.globalCompositeOperation = 'source-over';
                     canvasInfo.ctx.strokeStyle = brushColor;
                 }
-                canvasInfo.ctx.beginPath();
-                canvasInfo.ctx.moveTo(x, y);
                 canvasInfo.isDrawing = true;
                 canvasInfo.lastX = x;
                 canvasInfo.lastY = y;
@@ -569,24 +594,23 @@
 
             function draw(e) {
                 if (activeDocIndex === -1) return;
+                if (e.pointerType !== 'pen') {
+                    if (isPanning) {
+                        const dx = e.clientX - lastPanX;
+                        const dy = e.clientY - lastPanY;
+                        pdfContainer.scrollBy(-dx, -dy);
+                        lastPanX = e.clientX;
+                        lastPanY = e.clientY;
+                    }
+                    return;
+                }
+
                 const target = e.target;
                 const canvasInfo = getCanvasAndContextFromTarget(target);
                 if (!canvasInfo || !canvasInfo.isDrawing) return;
 
                 e.preventDefault();
-                const rect = target.getBoundingClientRect();
-                const scaleX = target.width / rect.width;
-                const scaleY = target.height / rect.height;
-                let clientX, clientY;
-                if (e.touches) {
-                    clientX = e.touches[0].clientX;
-                    clientY = e.touches[0].clientY;
-                } else {
-                    clientX = e.clientX;
-                    clientY = e.clientY;
-                }
-                const x = (clientX - rect.left) * scaleX;
-                const y = (clientY - rect.top) * scaleY;
+                const { x, y } = transformPoint(e.clientX, e.clientY, target);
 
                 canvasInfo.ctx.lineTo(x, y);
                 canvasInfo.ctx.stroke();
@@ -596,47 +620,29 @@
 
             function stopDrawing(e) {
                 if (activeDocIndex === -1) return;
+                if (e.pointerType !== 'pen') {
+                    isPanning = false;
+                    return;
+                }
+
                 const target = e.target;
                 const canvasInfo = getCanvasAndContextFromTarget(target);
                 if (canvasInfo && canvasInfo.isDrawing) {
                     canvasInfo.isDrawing = false;
                     canvasInfo.ctx.globalCompositeOperation = 'source-over';
-                    // Сохраняем рисунок в документ
                     const doc = documents[activeDocIndex];
                     const page = parseInt(canvasInfo.page);
                     doc.setDrawing(page, canvasInfo.canvas.toDataURL());
                 }
             }
 
-            // Подписка на события рисования (используем pointer events для различения стилуса)
-            document.addEventListener('pointerdown', (e) => {
-                if (e.pointerType === 'pen') {
-                    // Стилус - разрешаем рисование
-                    startDrawing(e);
-                } else if (currentTool === 'hand') {
-                    // Ладонь - начинаем панорамирование
-                    isPanning = true;
-                    lastPanX = e.clientX;
-                    lastPanY = e.clientY;
-                }
-            });
-            document.addEventListener('pointermove', (e) => {
-                if (e.pointerType === 'pen') {
-                    draw(e);
-                } else if (isPanning) {
-                    const dx = e.clientX - lastPanX;
-                    const dy = e.clientY - lastPanY;
-                    pdfContainer.scrollBy(-dx, -dy);
-                    lastPanX = e.clientX;
-                    lastPanY = e.clientY;
-                }
-            });
+            // Подписка на pointer events для различения стилуса/пальца
+            document.addEventListener('pointerdown', startDrawing);
+            document.addEventListener('pointermove', draw);
             document.addEventListener('pointerup', stopDrawing);
             document.addEventListener('pointercancel', stopDrawing);
 
-            // ---------- Прокрутка и масштабирование жестами ----------
-            let initialDistance = 0;
-            let initialScale = 1;
+            // ---------- Масштабирование жестами (pinch) ----------
             pdfContainer.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 2) {
                     const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -651,24 +657,17 @@
                     const dx = e.touches[0].clientX - e.touches[1].clientX;
                     const dy = e.touches[0].clientY - e.touches[1].clientY;
                     const distance = Math.sqrt(dx*dx + dy*dy);
-                    const newScale = initialScale * (distance / initialDistance);
-                    scale = Math.min(3, Math.max(0.5, newScale));
-                    applyTransform();
+                    let newScale = initialScale * (distance / initialDistance);
+                    newScale = Math.min(3, Math.max(0.5, newScale));
+                    scale = newScale;
+                    pdfContainer.style.transform = `scale(${scale})`;
                 }
             });
-
-            function applyTransform() {
-                // Применяем масштаб к каждому wrapper'у через transform
-                document.querySelectorAll('.pdf-page-wrapper').forEach(wrapper => {
-                    wrapper.style.transform = `scale(${scale})`;
-                });
-            }
 
             // ---------- Комментарии ----------
             commentsText.addEventListener('input', () => {
                 if (activeDocIndex === -1) return;
                 const doc = documents[activeDocIndex];
-                // Определяем текущую видимую страницу (по положению скролла)
                 const wrappers = document.querySelectorAll('.pdf-page-wrapper');
                 let visiblePage = 1;
                 if (wrappers.length > 0) {
@@ -756,6 +755,7 @@
             // Инициализация
             brushBtn.classList.add('active');
             colorPalette.querySelector('.color-item[style*="FF0000"]').classList.add('selected');
+            showMainMenu(); // начинаем с главного меню
         })();
     </script>
 </body>
