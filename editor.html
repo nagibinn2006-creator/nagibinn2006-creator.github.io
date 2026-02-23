@@ -57,7 +57,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            /* touch-action оставляем браузерному умолчанию */
+            /* touch-action будет управляться динамически */
         }
         #resizer { width: 8px; background: #aaa; cursor: col-resize; transition: background 0.2s; }
         #resizer:hover, #resizer:active { background: #1976D2; }
@@ -143,7 +143,7 @@
             // ---------- Состояние ----------
             const documents = [];
             let activeDocIndex = -1;
-            let currentTool = 'hand';            // По умолчанию 'hand' (ладонь)
+            let currentTool = 'hand'; // 'brush', 'eraser', 'hand'
             let brushColor = '#FF0000';
             let brushSize = 4;
 
@@ -177,7 +177,7 @@
             const sizeSlider = document.getElementById('sizeSlider');
             const sizeValue = document.getElementById('sizeValue');
 
-            // ---------- Генерация палитры ----------
+            // ---------- Генерация палитры (30 цветов) ----------
             function generateColorPalette() {
                 const colors = [
                     '#FF0000','#00FF00','#0000FF','#FFFF00','#FF00FF','#00FFFF','#000000','#FFFFFF',
@@ -197,11 +197,24 @@
                     });
                     colorPalette.appendChild(div);
                 });
+                // Выделяем красный по умолчанию
                 colorPalette.querySelector('[data-color="#FF0000"]').classList.add('selected');
             }
             generateColorPalette();
 
-            // ---------- Парсинг диапазона ----------
+            // ---------- Управление touch-action для canvas (блокировка прокрутки при рисовании) ----------
+            function updateCanvasTouchAction() {
+                const canvases = document.querySelectorAll('.draw-canvas');
+                canvases.forEach(canvas => {
+                    if (currentTool === 'brush' || currentTool === 'eraser') {
+                        canvas.style.touchAction = 'none';
+                    } else {
+                        canvas.style.touchAction = '';
+                    }
+                });
+            }
+
+            // ---------- Парсинг строки диапазона ----------
             function parseRangeString(str) {
                 if (!str.trim()) return [];
                 const parts = str.split(',');
@@ -226,18 +239,22 @@
                 constructor(file, pages) {
                     this.id = file.name + '_' + file.lastModified + '_' + file.size;
                     this.name = file.name;
-                    this.pages = pages;
+                    this.pages = pages;           // массив { dataURL, width, height }
+                    // Комментарии: массив объектов { pages: [1,2,5], html: "<p>..." }
                     this.comments = [];
-                    this.drawings = {};
+                    this.drawings = {};            // { pageNum: strokes[] }
                 }
 
+                // Получить комментарий для страницы (склеиваем все, что подходят)
                 getCommentHTMLForPage(page) {
                     const relevant = this.comments.filter(c => c.pages.includes(page));
                     if (relevant.length === 0) return '';
                     return relevant.map(c => c.html).join('<hr>');
                 }
 
+                // Добавить/обновить комментарий (простая стратегия: заменяем все комментарии для этих страниц на новый)
                 setComment(pagesArray, html) {
+                    // Удаляем старые комментарии, которые имеют пересечение с указанными страницами
                     this.comments = this.comments.filter(c => !c.pages.some(p => pagesArray.includes(p)));
                     if (html.trim() !== '') {
                         this.comments.push({ pages: pagesArray, html: html });
@@ -280,7 +297,7 @@
                 }
             }
 
-            // ---------- Вкладки ----------
+            // ---------- Работа с вкладками ----------
             function renderTabs() {
                 tabContainer.innerHTML = '';
                 documents.forEach((doc, i) => {
@@ -353,6 +370,7 @@
                 return 1;
             }
 
+            // Отрисовка всех штрихов на canvas
             function redrawDrawings(canvas, strokes) {
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -360,7 +378,7 @@
                     ctx.beginPath();
                     if (stroke.eraser) {
                         ctx.globalCompositeOperation = 'destination-out';
-                        ctx.strokeStyle = '#000000';
+                        ctx.strokeStyle = '#000000'; // цвет не важен, композиция решает
                     } else {
                         ctx.globalCompositeOperation = 'source-over';
                         ctx.strokeStyle = stroke.color;
@@ -375,6 +393,7 @@
                     }
                     ctx.stroke();
                 });
+                // Возвращаем композицию
                 ctx.globalCompositeOperation = 'source-over';
             }
 
@@ -403,20 +422,26 @@
 
                     pdfContainer.appendChild(wrapper);
 
+                    // Загружаем PDF слой
                     const img = new Image();
                     img.onload = () => {
                         pdfCanvas.getContext('2d').drawImage(img, 0, 0);
                     };
                     img.src = pageData.dataURL;
 
+                    // Загружаем рисунки
                     const strokes = doc.getDrawings(pageNum);
                     redrawDrawings(drawCanvas, strokes);
                 });
 
                 doc.loadFromLocalStorage();
+                // Показываем комментарий для первой страницы
                 updateCommentUIForPage(1);
                 pageIndicator.style.display = 'block';
                 pageIndicator.textContent = 'Стр. 1';
+
+                // Обновляем touch-action для новых canvas
+                updateCanvasTouchAction();
             }
 
             function updateCommentUIForPage(page) {
@@ -424,11 +449,13 @@
                 const doc = documents[activeDocIndex];
                 const html = doc.getCommentHTMLForPage(page);
                 commentsContent.innerHTML = html;
+                // Попытаемся вывести диапазон из первого подходящего комментария (если есть)
                 const relevant = doc.comments.filter(c => c.pages.includes(page));
                 if (relevant.length > 0) {
+                    // Преобразуем массив страниц в строку диапазона (упрощённо: объединяем все)
                     const pages = relevant.flatMap(c => c.pages);
                     const unique = [...new Set(pages)].sort((a,b)=>a-b);
-                    commentRange.value = unique.map(p => p).join(', ');
+                    commentRange.value = unique.map(p => p).join(', '); // упрощённо
                 } else {
                     commentRange.value = page.toString();
                 }
@@ -481,14 +508,19 @@
 
             // ---------- Комментарии ----------
             function onCommentChange() {
+                // Сохраняем при изменении поля диапазона или содержимого
                 if (activeDocIndex === -1) return;
+                const page = getVisiblePage();
+                if (page === -1) return;
                 saveCurrentComment();
             }
 
             commentsContent.addEventListener('input', onCommentChange);
             commentRange.addEventListener('change', onCommentChange);
+            // Добавляем обработчик blur, чтобы сохранять при клике вне поля диапазона
             commentRange.addEventListener('blur', onCommentChange);
 
+            // Вставка изображения
             addImageBtn.addEventListener('click', () => {
                 const url = prompt('Введите URL изображения:');
                 if (url) {
@@ -497,7 +529,7 @@
                 }
             });
 
-            // ---------- Обновление индикатора страницы ----------
+            // ---------- Обновление индикатора страницы при прокрутке ----------
             pdfPanel.addEventListener('scroll', () => {
                 const page = getVisiblePage();
                 if (page !== -1) {
@@ -543,24 +575,21 @@
             window.addEventListener('mouseup', () => { isResizing = false; });
             window.addEventListener('touchend', () => { isResizing = false; });
 
-            // ---------- Рисование (исправленная логика) ----------
+            // ---------- Рисование (только стилус) с захватом указателя ----------
             function getCanvasFromTarget(target) {
                 return target.classList.contains('draw-canvas') ? target : null;
             }
 
             function handlePointerDown(e) {
-                // Если активен инструмент "рука" – игнорируем все указатели (прокрутка работает стандартно)
-                if (currentTool === 'hand') return;
+                if (activeDocIndex === -1) return;
+                if (e.pointerType !== 'pen') return; // только стилус
 
                 const canvas = getCanvasFromTarget(e.target);
                 if (!canvas) return;
 
-                // Разрешаем рисование только для пера и мыши (палец игнорируем)
-                if (e.pointerType !== 'pen' && e.pointerType !== 'mouse') return;
-
-                // Захватываем указатель и блокируем прокрутку
+                // Захватываем указатель, чтобы получать события даже за пределами canvas
                 canvas.setPointerCapture(e.pointerId);
-                e.preventDefault();
+                e.preventDefault(); // предотвращаем прокрутку во время рисования
 
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
@@ -583,7 +612,7 @@
                 ctx.moveTo(x, y);
                 if (currentTool === 'eraser') {
                     ctx.globalCompositeOperation = 'destination-out';
-                    ctx.strokeStyle = '#000000';
+                    ctx.strokeStyle = '#000000'; // любой цвет
                 } else {
                     ctx.globalCompositeOperation = 'source-over';
                     ctx.strokeStyle = brushColor;
@@ -594,12 +623,9 @@
             }
 
             function handlePointerMove(e) {
-                if (!isDrawing || !currentCanvas || !currentStroke) return;
-                // Дополнительная проверка: если вдруг указатель изменился (например, палец), но мы уже рисуем – всё равно блокируем
-                if (e.pointerType !== 'pen' && e.pointerType !== 'mouse') return;
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen') return;
 
-                e.preventDefault(); // блокируем прокрутку во время рисования
-
+                e.preventDefault(); // важно, чтобы прокрутка не мешала
                 const canvas = currentCanvas;
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
@@ -617,8 +643,7 @@
             }
 
             function handlePointerUp(e) {
-                if (!isDrawing || !currentCanvas || !currentStroke) return;
-                if (e.pointerType !== 'pen' && e.pointerType !== 'mouse') return;
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen') return;
 
                 e.preventDefault();
                 isDrawing = false;
@@ -630,7 +655,7 @@
                 }
 
                 const ctx = currentCanvas.getContext('2d');
-                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalCompositeOperation = 'source-over'; // сброс
 
                 currentStroke = null;
                 currentCanvas = null;
@@ -648,6 +673,7 @@
                 eraserBtn.classList.remove('active');
                 handBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
             });
             eraserBtn.addEventListener('click', () => {
                 currentTool = 'eraser';
@@ -655,6 +681,7 @@
                 brushBtn.classList.remove('active');
                 handBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
             });
             handBtn.addEventListener('click', () => {
                 currentTool = 'hand';
@@ -662,6 +689,7 @@
                 brushBtn.classList.remove('active');
                 eraserBtn.classList.remove('active');
                 brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
             });
 
             // Показ всплывающего окна
@@ -772,9 +800,10 @@
                 }
             });
 
-            // Инициализация: активна рука
-            handBtn.classList.add('active');
+            // Инициализация
+            brushBtn.classList.add('active');
             pageIndicator.style.display = 'none';
+            updateCanvasTouchAction(); // на случай, если есть canvas
         })();
     </script>
 </body>
