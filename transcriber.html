@@ -5,131 +5,91 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M4A → Текст (Whisper WASM)</title>
     <style>
-        body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f7; color: #1d1d1f; }
-        h1 { text-align: center; color: #007aff; }
-        #fileInput { width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 10px; background: white; font-size: 16px; }
-        button { width: 100%; padding: 16px; background: #007aff; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 600; margin: 10px 0; cursor: pointer; }
-        button:disabled { background: #c7c7cc; cursor: not-allowed; }
-        #progress { margin: 20px 0; padding: 15px; background: #e5e5ea; border-radius: 10px; text-align: center; display: none; }
-        #result { margin-top: 20px; padding: 20px; background: white; border-radius: 10px; border: 1px solid #d2d2d7; white-space: pre-wrap; min-height: 100px; font-family: monospace; }
-        #status { text-align: center; color: #86868b; margin: 10px 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 500px; margin: 20px auto; padding: 20px; background: #f8f9fa; }
+        h1 { color: #007aff; text-align: center; }
+        input, button { display: block; width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        button { background: #007aff; color: white; border: none; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        #status, #progress { text-align: center; margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 5px; }
+        #result { margin-top: 20px; padding: 20px; background: white; border: 1px solid #ddd; border-radius: 8px; min-height: 120px; white-space: pre-wrap; font-family: monospace; }
     </style>
 </head>
 <body>
-    <h1>🎤 M4A в текст (Русский + English)</h1>
-    <p>Выберите M4A файл (iPhone/iPad Safari). Транскрипция локально через Whisper WASM.</p>
+    <h1>🎤 M4A в текст</h1>
+    <p>Загрузите модель <a href="models/" target="_blank">здесь</a> (ggml-base.en.bin или ggml-base-ru.bin), затем M4A файл.</p>
     
-    <input type="file" id="fileInput" accept="audio/m4a,audio/mp4" />
-    <button id="transcribeBtn" disabled>Транскрибировать</button>
+    <input type="file" id="audioFile" accept="audio/m4a,audio/mp4,audio/wav">
+    <button id="transcribeBtn" disabled>Транскрибировать (Рус/Eng)</button>
     
-    <div id="progress">Загрузка модели... <span id="progressText">0%</span></div>
-    <div id="status">Выберите файл для начала</div>
-    <div id="result">Результат появится здесь...</div>
+    <div id="progress" style="display:none;">Обработка: <span id="prog">0%</span></div>
+    <div id="status">Выберите модель и аудио</div>
+    <div id="result">Результат...</div>
+
+    <!-- Вставьте whisper.wasm скрипты (скачайте из демо) -->
+    <script src="https://unpkg.com/@tensorflow/tfjs"></script> <!-- Если нужно для аудио -->
+    <!-- Или локально: <script src="whisper.js"></script> из https://github.com/timur00kh/whisper.wasm -->
 
     <script>
-        const fileInput = document.getElementById('fileInput');
+        const Whisper = {}; // Placeholder для whisper.wasm API
+        // Загрузка готового whisper.wasm (адаптируйте)
+        // В репо добавьте whisper.wasm файлы из https://github.com/timur00kh/whisper.wasm/tree/main/demo
+
+        let audioCtx = null;
+        const audioFile = document.getElementById('audioFile');
         const transcribeBtn = document.getElementById('transcribeBtn');
-        const progress = document.getElementById('progress');
-        const progressText = document.getElementById('progressText');
         const status = document.getElementById('status');
+        const progress = document.getElementById('progress');
+        const prog = document.getElementById('prog');
         const result = document.getElementById('result');
 
-        let audioContext;
-        let whisperModule = null; // Будет загружено из WASM
-
-        // Инициализация Whisper WASM (адаптируйте под ваш билд)
-        async function initWhisper() {
-            status.textContent = 'Инициализация Whisper WASM...';
-            progress.style.display = 'block';
-            
-            // Пример для whisper.wasm или stream.wasm - скачайте с GitHub
-            // Замените на ваш URL модели и WASM файлы
-            const modelUrl = 'models/ggml-base-ru.bin'; // ~150MB, русский
-            // Пример загрузки Emscripten билда (stream.js из whisper.cpp)
-            importScripts('libstream.js'); // Или динамический import
-            
-            // Загрузка модели (пример для whisper.cpp wasm демо)
-            whisperModule = await Emscripten.WASM; // Адаптировать под реальный билд
-            // whisperModule = await import('./whisper.wasm.js');
-            
-            // Загрузка модели
-            await whisperModule.init(modelUrl);
-            progress.style.display = 'none';
-            status.textContent = 'Готово! Выберите M4A файл.';
+        // Декод M4A в 16kHz PCM
+        async function m4aToPCM(file) {
+            if (!audioCtx) audioCtx = new AudioContext({ sampleRate: 16000 });
+            const buffer = await file.arrayBuffer();
+            const audioBuf = await audioCtx.decodeAudioData(buffer);
+            const pcm = audioCtx.createBuffer(1, audioBuf.length, 16000);
+            const channelData = audioBuf.getChannelData(0);
+            pcm.copyToChannel(channelData, 0);
+            return pcm.getChannelData(0);
         }
 
-        // Декодирование M4A в PCM float32 16kHz
-        async function decodeM4AToPCM(file) {
-            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        // Транскрипция (пример API whisper.cpp wasm)
+        async function transcribe(pcm) {
+            // Адаптируйте под ваш WASM:
+            // const ctx = Whisper.create_context('models/ggml-base.bin');
+            // const res = Whisper.full(ctx, pcm);
+            // return Whisper.full_get_segment(ctx, 0);
             
-            status.textContent = 'Декодирование аудио...';
-            const arrayBuffer = await file.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            
-            // Конверт в моно float32
-            let pcmData = [];
-            const channels = audioBuffer.numberOfChannels;
-            const samples = audioBuffer.length;
-            for (let i = 0; i < samples; i++) {
-                let sum = 0;
-                for (let ch = 0; ch < channels; ch++) {
-                    sum += audioBuffer.getChannelData(ch)[i];
-                }
-                pcmData.push(sum / channels);
-            }
-            return new Float32Array(pcmData);
+            // Placeholder - замените на реальный вызов
+            status.textContent = 'Транскрипция... (замените на whisper.transcribe(pcm, {language: "ru"}))';
+            await new Promise(r => setTimeout(r, 2000)); // Симуляция
+            return 'Пример текста: "Это распознанный русский с английским". Точный текст от Whisper.';
         }
 
-        // Транскрипция через Whisper
-        async function transcribe(pcmData) {
-            status.textContent = 'Распознавание речи... (может занять минуты)';
-            progress.style.display = 'block';
-            progressText.textContent = '0%';
-            
-            // Параметры для русского с английским
-            const params = {
-                language: 'ru', // Автоопределение многоязычное
-                translate: false,
-                n_threads: navigator.hardwareConcurrency || 4
-            };
-            
-            const text = await whisperModule.transcribe(pcmData, params); // Адаптировать API
-            progress.style.display = 'none';
-            return text;
-        }
+        audioFile.onchange = () => {
+            transcribeBtn.disabled = !audioFile.files[0];
+        };
 
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                transcribeBtn.disabled = false;
-                transcribeBtn.textContent = `Транскрибировать ${file.name}`;
-            }
-        });
-
-        transcribeBtn.addEventListener('click', async () => {
-            const file = fileInput.files[0];
+        transcribeBtn.onclick = async () => {
+            const file = audioFile.files[0];
             if (!file) return;
             
             transcribeBtn.disabled = true;
-            transcribeBtn.textContent = 'Обработка...';
-            
+            status.textContent = 'Декодирование M4A...';
+            progress.style.display = 'block';
+
             try {
-                if (!whisperModule) await initWhisper();
-                const pcmData = await decodeM4AToPCM(file);
-                const text = await transcribe(pcmData);
+                const pcm = await m4aToPCM(file);
+                prog.textContent = '50%';
+                const text = await transcribe(pcm);
                 result.textContent = text;
                 status.textContent = 'Готово!';
-            } catch (error) {
-                status.textContent = `Ошибка: ${error.message}`;
-                console.error(error);
-            } finally {
-                transcribeBtn.disabled = false;
-                transcribeBtn.textContent = 'Транскрибировать';
+            } catch (e) {
+                status.textContent = `Ошибка: ${e.message}`;
             }
-        });
-
-        // Автоинициализация при загрузке
-        window.addEventListener('load', initWhisper);
+            progress.style.display = 'none';
+            transcribeBtn.disabled = false;
+        };
     </script>
 </body>
 </html>
