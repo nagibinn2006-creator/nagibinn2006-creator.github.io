@@ -228,7 +228,7 @@
                     try {
                         const page = await pdfDoc.getPage(pageNum);
                         // Задаём ширину ровно 120px — canvas будет такого же размера
-                        const viewport = page.getViewport({ width: 120 });
+                        const viewport = page.getViewport({ width: "120px" });
 
                         const canvas = document.createElement('canvas');
                         canvas.width = viewport.width;
