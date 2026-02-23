@@ -228,7 +228,7 @@
                     try {
                         const page = await pdfDoc.getPage(pageNum);
                         // Задаём ширину ровно 120px — canvas будет такого же размера
-                        const viewport = page.getViewport({ width: "120px" });
+                        const viewport = page.getViewport();
 
                         const canvas = document.createElement('canvas');
                         canvas.width = viewport.width;
@@ -251,19 +251,6 @@
                         thumbDiv.appendChild(numberSpan);
 
                         previewContainer.appendChild(thumbDiv);
-                    } catch (pageError) {
-                        console.warn(`Ошибка стр.${pageNum}:`, pageError);
-                        const errDiv = document.createElement('div');
-                        errDiv.className = 'page-thumb';
-                        errDiv.style.width = '120px';
-                        errDiv.style.height = '160px';
-                        errDiv.style.background = '#fee2e2';
-                        errDiv.style.display = 'flex';
-                        errDiv.style.alignItems = 'center';
-                        errDiv.style.justifyContent = 'center';
-                        errDiv.style.color = '#b91c1c';
-                        errDiv.textContent = `⚠️ стр.${pageNum}`;
-                        previewContainer.appendChild(errDiv);
                     }
                 }
             }
