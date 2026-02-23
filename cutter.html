@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>PDF Смарт-нарезка — фикс. размер превью</title>
+    <title>PDF Смарт-нарезка — фикс. превью с содержимым</title>
     <!-- PDF.js (основная библиотека и воркер) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- pdf-lib для создания новых PDF -->
@@ -201,7 +201,7 @@
         .download-link:active {
             background: #1e3a8a;
         }
-        /* ПРЕДПРОСМОТР — ФИКСИРОВАННЫЙ РАЗМЕР КАЖДОЙ МИНИАТЮРЫ */
+        /* ПРЕДПРОСМОТР — фиксированный контейнер 120x160 */
         .preview-container {
             display: flex;
             flex-wrap: wrap;
@@ -214,9 +214,9 @@
             position: relative;
             width: 120px;
             height: 160px;
-            background: #f9fafb;
+            background: #ffffff;
             border-radius: 8px;
-            overflow: hidden; /* скрываем выходящее за рамки */
+            overflow: hidden;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             border: 2px solid white;
             display: flex;
@@ -227,7 +227,7 @@
             display: block;
             width: 100%;
             height: 100%;
-            object-fit: contain; /* вписываем без искажений, добавляя поля */
+            object-fit: contain;  /* сохраняет пропорции, добавляя поля при необходимости */
             background: white;
         }
         .page-number {
@@ -264,25 +264,21 @@
 </head>
 <body>
     <div class="split">
-        <!-- Левая/верхняя панель управления (меньшая) -->
+        <!-- Панель управления (меньшая) -->
         <div class="pane controls-pane">
             <h3>📄 Настройка нарезки</h3>
             <div class="file-input-wrapper">
                 <input type="file" id="fileInput" accept="application/pdf">
             </div>
-            <div id="rangesContainer">
-                <!-- Строки будут добавляться сюда динамически -->
-            </div>
+            <div id="rangesContainer"></div>
             <div class="action-buttons">
                 <button id="addRangeBtn">➕ Добавить</button>
                 <button id="sliceBtn">✂️ Нарезать</button>
             </div>
-            <div id="downloadLinks">
-                <!-- Ссылки на готовые файлы появятся здесь -->
-            </div>
+            <div id="downloadLinks"></div>
         </div>
 
-        <!-- Правая/нижняя панель предпросмотра (большая) -->
+        <!-- Панель предпросмотра (большая) -->
         <div class="pane preview-pane">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span class="total-pages-badge" id="pageCountBadge">⬅️ загрузите PDF</span>
@@ -296,7 +292,6 @@
 
     <script>
         (function() {
-            // --- Инициализация глобальных переменных ---
             const { PDFDocument } = PDFLib;
             const pdfjsLib = window.pdfjsLib;
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
@@ -310,7 +305,7 @@
             const previewContainer = document.getElementById('previewContainer');
             const pageCountBadge = document.getElementById('pageCountBadge');
 
-            // Состояние приложения
+            // Состояние
             let currentPdfJsDoc = null;
             let currentPdfLibDoc = null;
             let sourceBuffer = null;
@@ -318,7 +313,7 @@
             let renderId = 0;
             let createdUrls = [];
 
-            // --- Вспомогательные функции ---
+            // Вспомогательные функции
             function revokeAllUrls() {
                 createdUrls.forEach(url => URL.revokeObjectURL(url));
                 createdUrls = [];
@@ -342,7 +337,7 @@
                 }
             }
 
-            // --- Парсинг строки диапазонов ---
+            // Парсинг диапазона
             function parseRangeString(rangeStr, maxPage) {
                 if (!rangeStr || rangeStr.trim() === '') {
                     throw new Error('Пустая строка диапазона');
@@ -353,9 +348,7 @@
                 for (let part of parts) {
                     if (part.includes('-')) {
                         const dashParts = part.split('-').map(s => s.trim());
-                        if (dashParts.length !== 2) {
-                            throw new Error(`Неверный диапазон: "${part}"`);
-                        }
+                        if (dashParts.length !== 2) throw new Error(`Неверный диапазон: "${part}"`);
                         const start = parseInt(dashParts[0], 10);
                         const end = parseInt(dashParts[1], 10);
                         if (isNaN(start) || isNaN(end) || start < 1 || end < 1 || start > end) {
@@ -364,9 +357,7 @@
                         if (start > maxPage || end > maxPage) {
                             throw new Error(`Диапазон ${part} выходит за пределы (макс. ${maxPage})`);
                         }
-                        for (let i = start; i <= end; i++) {
-                            pages.push(i);
-                        }
+                        for (let i = start; i <= end; i++) pages.push(i);
                     } else {
                         const pageNum = parseInt(part, 10);
                         if (isNaN(pageNum) || pageNum < 1 || pageNum > maxPage) {
@@ -375,13 +366,11 @@
                         pages.push(pageNum);
                     }
                 }
-                if (pages.length === 0) {
-                    throw new Error('Не удалось извлечь ни одной страницы');
-                }
+                if (pages.length === 0) throw new Error('Не удалось извлечь ни одной страницы');
                 return pages;
             }
 
-            // --- Динамическое добавление строки ---
+            // Добавление строки диапазона
             function addRangeRow(rangeValue = '', nameValue = '') {
                 const row = document.createElement('div');
                 row.className = 'range-row';
@@ -401,22 +390,16 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'remove-row';
                 removeBtn.innerHTML = '✕';
-                removeBtn.setAttribute('aria-label', 'Удалить');
-                removeBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    row.remove();
-                });
+                removeBtn.addEventListener('click', () => row.remove());
 
                 row.appendChild(rangeInput);
                 row.appendChild(nameInput);
                 row.appendChild(removeBtn);
                 rangesContainer.appendChild(row);
             }
+            addRangeRow('1-3', 'часть_1'); // стартовая строка
 
-            // Инициализация одной строки при старте
-            addRangeRow('1-3', 'часть_1');
-
-            // --- Загрузка и обработка PDF ---
+            // Загрузка PDF
             fileInput.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -433,13 +416,13 @@
                     const arrayBuffer = await file.arrayBuffer();
                     sourceBuffer = arrayBuffer.slice(0);
 
-                    // PDF.js для предпросмотра
+                    // Загружаем для предпросмотра (pdf.js)
                     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                     currentPdfJsDoc = await loadingTask.promise;
                     totalPages = currentPdfJsDoc.numPages;
                     updatePageBadge();
 
-                    // pdf-lib для нарезки
+                    // Загружаем для нарезки (pdf-lib)
                     currentPdfLibDoc = await PDFDocument.load(arrayBuffer);
 
                     // Запускаем последовательный рендеринг
@@ -452,21 +435,21 @@
                 }
             });
 
-            // --- Последовательный рендеринг страниц с фиксированным контейнером ---
+            // --- ОСНОВНАЯ ФУНКЦИЯ РЕНДЕРИНГА (исправленная) ---
             async function renderPreviewPages(pdfDoc, numPages) {
                 const currentRender = ++renderId;
-                previewContainer.innerHTML = '';
+                previewContainer.innerHTML = ''; // очищаем
 
                 for (let pageNum = 1; pageNum <= numPages; pageNum++) {
                     if (currentRender !== renderId) {
-                        console.log('Рендер отменён (новый файл)');
+                        console.log('Рендер отменён');
                         return;
                     }
 
                     try {
                         const page = await pdfDoc.getPage(pageNum);
-                        // Рассчитываем viewport с разумным разрешением (например, 150px ширины для чёткости)
-                        const viewport = page.getViewport({ width: 150 }); 
+                        // Задаём viewport с достаточным разрешением (ширина 150px для чёткости)
+                        const viewport = page.getViewport({ width: 150 });
 
                         const canvas = document.createElement('canvas');
                         canvas.width = viewport.width;
@@ -478,9 +461,10 @@
                             viewport: viewport,
                         };
 
+                        // Ждём завершения рендера
                         await page.render(renderContext).promise;
 
-                        // Оборачиваем canvas в контейнер с фиксированными размерами
+                        // Оборачиваем canvas в контейнер с фиксированным размером
                         const thumbDiv = document.createElement('div');
                         thumbDiv.className = 'page-thumb';
                         thumbDiv.appendChild(canvas);
@@ -493,14 +477,22 @@
                         previewContainer.appendChild(thumbDiv);
                     } catch (pageError) {
                         console.warn(`Ошибка рендера страницы ${pageNum}:`, pageError);
+                        // Показываем заглушку с номером страницы и сообщением об ошибке
                         const errorDiv = document.createElement('div');
-                        errorDiv.textContent = `⚠️ стр.${pageNum} не загрузилась`;
+                        errorDiv.className = 'page-thumb';
+                        errorDiv.style.background = '#fee2e2';
+                        errorDiv.style.display = 'flex';
+                        errorDiv.style.alignItems = 'center';
+                        errorDiv.style.justifyContent = 'center';
+                        errorDiv.style.color = '#b91c1c';
+                        errorDiv.style.fontSize = '12px';
+                        errorDiv.textContent = `⚠️ стр.${pageNum}`;
                         previewContainer.appendChild(errorDiv);
                     }
                 }
             }
 
-            // --- Основная функция нарезки ---
+            // Нарезка PDF
             sliceBtn.addEventListener('click', async () => {
                 if (!currentPdfLibDoc || !sourceBuffer || totalPages === 0) {
                     alert('Сначала загрузите PDF-файл');
@@ -509,7 +501,7 @@
 
                 const rows = document.querySelectorAll('.range-row');
                 if (rows.length === 0) {
-                    alert('Добавьте хотя бы один диапазон для нарезки');
+                    alert('Добавьте хотя бы один диапазон');
                     return;
                 }
 
@@ -526,7 +518,7 @@
                     const baseName = nameInput.value.trim() || 'output';
 
                     if (!rangeStr) {
-                        alert('Обнаружена пустая строка диапазона. Заполните или удалите её.');
+                        alert('Пустая строка диапазона. Заполните или удалите её.');
                         sliceBtn.disabled = false;
                         sliceBtn.textContent = '✂️ Нарезать';
                         return;
@@ -534,9 +526,8 @@
 
                     try {
                         const pageNumbers = parseRangeString(rangeStr, totalPages);
-                        const pageIndices = pageNumbers.map(p => p - 1);
                         jobs.push({
-                            indices: pageIndices,
+                            indices: pageNumbers.map(p => p - 1),
                             name: baseName
                         });
                     } catch (parseErr) {
@@ -548,28 +539,22 @@
                 }
 
                 try {
-                    const sourcePdf = currentPdfLibDoc;
-
-                    for (let i = 0; i < jobs.length; i++) {
-                        const job = jobs[i];
+                    for (let job of jobs) {
                         const newPdf = await PDFDocument.create();
-                        const copiedPages = await newPdf.copyPages(sourcePdf, job.indices);
+                        const copiedPages = await newPdf.copyPages(currentPdfLibDoc, job.indices);
                         copiedPages.forEach(page => newPdf.addPage(page));
-
                         const pdfBytes = await newPdf.save();
                         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
                         const url = URL.createObjectURL(blob);
                         createdUrls.push(url);
 
-                        let finalFileName = job.name;
-                        if (!finalFileName.toLowerCase().endsWith('.pdf')) {
-                            finalFileName += '.pdf';
-                        }
+                        let fileName = job.name;
+                        if (!fileName.toLowerCase().endsWith('.pdf')) fileName += '.pdf';
 
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = finalFileName;
-                        link.textContent = `📎 ${finalFileName}`;
+                        link.download = fileName;
+                        link.textContent = `📎 ${fileName}`;
                         link.className = 'download-link';
                         link.target = '_blank';
                         downloadLinksDiv.appendChild(link);
@@ -581,24 +566,17 @@
                         title.style.margin = '0 0 10px 0';
                         title.style.fontWeight = '600';
                         downloadLinksDiv.prepend(title);
-                    } else {
-                        downloadLinksDiv.innerHTML = '<p>Нет валидных заданий</p>';
                     }
-
                 } catch (error) {
-                    console.error('Ошибка при нарезке:', error);
-                    alert('Произошла ошибка при создании PDF. Смотрите консоль.');
+                    console.error('Ошибка нарезки:', error);
+                    alert('Ошибка при создании PDF.');
                 } finally {
                     sliceBtn.disabled = false;
                     sliceBtn.textContent = '✂️ Нарезать';
                 }
             });
 
-            // --- Добавление новой строки по кнопке ---
-            addRangeBtn.addEventListener('click', () => {
-                addRangeRow('', '');
-            });
-
+            addRangeBtn.addEventListener('click', () => addRangeRow('', ''));
         })();
     </script>
 </body>
