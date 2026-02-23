@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>PDF Reader с рукописными заметками (стилус)</title>
+    <title>PDF Reader с рукописными заметками и HTML комментариями</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f0f2f5; overflow: hidden; }
         /* Верхняя панель */
-        #topBar { background: #1976D2; color: white; padding: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        #topBar { background: #1976D2; color: white; padding: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 10; }
         #tabContainer { display: flex; flex: 1; gap: 5px; overflow-x: auto; white-space: nowrap; }
         .tab { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
         .tab.active { background: rgba(255,255,255,0.4); font-weight: bold; }
@@ -16,18 +16,17 @@
         .tab .close:active { background: rgba(0,0,0,0.5); }
         #openPdfBtn { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         #settingsBtn { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: auto; }
-        /* Инструменты */
         .tool-icon { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 22px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; position: relative; }
         .tool-icon.active { background: rgba(255,255,255,0.4); }
         .tool-icon:active { background: rgba(255,255,255,0.6); }
         #brushSizePicker {
-            position: fixed; /* меняем на fixed, чтобы позиционировать относительно viewport */
+            position: fixed;
             background: white;
             color: black;
             border-radius: 8px;
             padding: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            z-index: 1000;
+            z-index: 2000;
             min-width: 220px;
             display: none;
         }
@@ -42,7 +41,7 @@
         #pdfContainer { width: 100%; max-width: 100%; padding-left: 5px; }
         .pdf-page-wrapper {
             position: relative;
-            margin-bottom: 15px; /* фиксированный отступ между страницами */
+            margin-bottom: 15px;
             width: 100%;
             background: white;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
@@ -52,14 +51,32 @@
             width: 100%;
             height: auto;
         }
-        .draw-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%;}
+        .draw-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* touch-action удалено для прокрутки пальцем */
+        }
         #resizer { width: 8px; background: #aaa; cursor: col-resize; transition: background 0.2s; }
         #resizer:hover, #resizer:active { background: #1976D2; }
         #commentsPanel { background: white; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid #ccc; }
         .comments-range { display: flex; padding: 10px; gap: 5px; background: #f5f5f5; border-bottom: 1px solid #ddd; }
         .comments-range input { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 16px; }
         .comments-range span { align-self: center; }
-        #commentsText { flex: 1; width: 100%; padding: 15px; font-size: 16px; border: none; resize: none; outline: none; }
+        #commentsHtml {
+            flex: 1;
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border: none;
+            outline: none;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #commentsHtml img { max-width: 100%; height: auto; }
         #pageIndicator { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white; padding: 12px 24px; border-radius: 40px; font-weight: bold; z-index: 100; pointer-events: none; }
         /* Модальное окно */
         #settingsModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 2000; }
@@ -70,6 +87,7 @@
         .file-list-item button { background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
         .hidden { display: none; }
         #fileInput { display: none; }
+        #insertImageBtn { margin-left: 5px; padding: 5px 10px; background: #1976D2; color: white; border: none; border-radius: 4px; cursor: pointer; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
@@ -81,7 +99,6 @@
         <button class="tool-icon" id="brushBtn" title="Кисть (стилус)">🖌️</button>
         <button class="tool-icon" id="eraserBtn" title="Ластик (стилус)">🧽</button>
         <button class="tool-icon" id="handBtn" title="Ладонь (листать)">✋</button>
-        <!-- Всплывающее окно для кисти/ластика -->
         <div id="brushSizePicker">
             <div class="color-palette" id="colorPalette"></div>
             <div class="slider-container">
@@ -99,18 +116,19 @@
         </div>
         <div id="resizer"></div>
         <div id="commentsPanel" style="width: 30%;">
-            <div class="comments-range">
-                <input type="number" id="commentFrom" min="1" value="1">
+            <div style="display: flex; align-items: center; padding: 5px;">
+                <span>Страницы:</span>
+                <input type="number" id="commentFrom" min="1" value="1" style="width:60px; margin-left:5px;">
                 <span>—</span>
-                <input type="number" id="commentTo" min="1" value="1">
+                <input type="number" id="commentTo" min="1" value="1" style="width:60px;">
+                <button id="insertImageBtn" title="Вставить изображение по ссылке">🖼️</button>
             </div>
-            <textarea id="commentsText" placeholder="Текстовый комментарий для диапазона..."></textarea>
+            <div id="commentsHtml" contenteditable="true" placeholder="Введите комментарий..."></div>
         </div>
     </div>
 
     <div id="pageIndicator">Стр. 1</div>
 
-    <!-- Модальное окно настроек -->
     <div id="settingsModal">
         <div class="modal-content">
             <h3>Настройки хранилища</h3>
@@ -127,7 +145,7 @@
         (function() {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-            // ---------- Состояние ----------
+            // Состояние
             const documents = [];
             let activeDocIndex = -1;
             let currentTool = 'brush'; // 'brush', 'eraser', 'hand'
@@ -138,13 +156,12 @@
             let isDrawing = false;
             let currentStroke = null;
             let currentCanvas = null;
-            let lastPointerId = null; // для отслеживания стилуса
 
             // Элементы
             const tabContainer = document.getElementById('tabContainer');
             const pdfContainer = document.getElementById('pdfContainer');
             const pageIndicator = document.getElementById('pageIndicator');
-            const commentsText = document.getElementById('commentsText');
+            const commentsHtml = document.getElementById('commentsHtml');
             const commentFrom = document.getElementById('commentFrom');
             const commentTo = document.getElementById('commentTo');
             const resizer = document.getElementById('resizer');
@@ -164,18 +181,17 @@
             const colorPalette = document.getElementById('colorPalette');
             const sizeSlider = document.getElementById('sizeSlider');
             const sizeValue = document.getElementById('sizeValue');
+            const insertImageBtn = document.getElementById('insertImageBtn');
 
-            // ---------- Генерация палитры (30 цветов) ----------
+            // Генерация палитры (30 цветов)
             function generateColorPalette() {
-                const colors = [];
-                // Основные цвета + градиенты
-                const baseColors = [
+                const colors = [
                     '#FF0000','#00FF00','#0000FF','#FFFF00','#FF00FF','#00FFFF','#000000','#FFFFFF',
                     '#FF4500','#FFD700','#ADFF2F','#00CED1','#1E90FF','#EE82EE','#A52A2A','#808080',
                     '#F08080','#90EE90','#ADD8E6','#FFB6C1','#FFA07A','#20B2AA','#87CEFA','#778899',
                     '#B0C4DE','#FFFFE0','#FAFAD2','#D3D3D3','#DAA520','#CD5C5C'
                 ];
-                baseColors.forEach(c => {
+                colors.forEach(c => {
                     const div = document.createElement('div');
                     div.className = 'color-item';
                     div.style.backgroundColor = c;
@@ -187,36 +203,37 @@
                     });
                     colorPalette.appendChild(div);
                 });
-                // Выделяем красный по умолчанию
                 colorPalette.querySelector('[data-color="#FF0000"]').classList.add('selected');
             }
             generateColorPalette();
 
-            // ---------- Класс документа ----------
+            // Класс документа
             class PDFDocument {
                 constructor(file, pages) {
                     this.id = file.name + '_' + file.lastModified + '_' + file.size;
                     this.name = file.name;
-                    this.pages = pages;           // массив { dataURL, width, height }
-                    this.comments = [];
+                    this.pages = pages;           // { dataURL, width, height }
+                    this.comments = {};            // ключ - страница, значение - HTML строка (для диапазона проще хранить как массив, но пока для каждой страницы)
                     this.drawings = {};            // { pageNum: strokes[] }
                 }
 
+                // Для комментариев используем привязку к странице, диапазон учитывается при загрузке
                 getCommentForPage(page) {
-                    const c = this.comments.find(c => c.startPage <= page && c.endPage >= page);
-                    return c ? c.text : '';
+                    return this.comments[page] || '';
                 }
 
-                setComment(start, end, text) {
-                    this.comments = this.comments.filter(c => !(c.startPage <= end && c.endPage >= start));
-                    if (text.trim() !== '') {
-                        this.comments.push({ startPage: start, endPage: end, text });
-                    }
+                setCommentForPage(page, html) {
+                    this.comments[page] = html;
                     this.saveToLocalStorage();
                 }
 
                 getDrawings(page) {
                     return this.drawings[page] || [];
+                }
+
+                setDrawings(page, strokes) {
+                    this.drawings[page] = strokes;
+                    this.saveToLocalStorage();
                 }
 
                 addStroke(page, stroke) {
@@ -225,7 +242,6 @@
                     this.saveToLocalStorage();
                 }
 
-                // Сохранение в localStorage
                 saveToLocalStorage() {
                     const key = 'pdf_data_' + this.id;
                     const data = {
@@ -241,17 +257,17 @@
                     if (saved) {
                         try {
                             const data = JSON.parse(saved);
-                            this.comments = data.comments || [];
+                            this.comments = data.comments || {};
                             this.drawings = data.drawings || {};
                         } catch (e) {
-                            this.comments = [];
+                            this.comments = {};
                             this.drawings = {};
                         }
                     }
                 }
             }
 
-            // ---------- Работа с вкладками ----------
+            // Работа с вкладками
             function renderTabs() {
                 tabContainer.innerHTML = '';
                 documents.forEach((doc, i) => {
@@ -307,9 +323,8 @@
                 const doc = documents[activeDocIndex];
                 const page = getVisiblePage();
                 if (page === -1) return;
-                const from = parseInt(commentFrom.value) || page;
-                const to = parseInt(commentTo.value) || page;
-                doc.setComment(from, to, commentsText.value);
+                // Сохраняем HTML комментарий для этой страницы
+                doc.setCommentForPage(page, commentsHtml.innerHTML);
             }
 
             function getVisiblePage() {
@@ -325,13 +340,20 @@
                 return 1;
             }
 
-            // Отрисовка всех штрихов на canvas
+            // Отрисовка всех штрихов на canvas с учётом ластика
             function redrawDrawings(canvas, strokes) {
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 strokes.forEach(stroke => {
+                    if (stroke.color === '#FFFFFF') {
+                        // Ластик: используем destination-out, чтобы стереть
+                        ctx.globalCompositeOperation = 'destination-out';
+                        ctx.strokeStyle = '#000000'; // цвет не важен при этой операции
+                    } else {
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.strokeStyle = stroke.color;
+                    }
                     ctx.beginPath();
-                    ctx.strokeStyle = stroke.color;
                     ctx.lineWidth = stroke.size;
                     ctx.lineCap = 'round';
                     ctx.lineJoin = 'round';
@@ -342,6 +364,8 @@
                     }
                     ctx.stroke();
                 });
+                // Сбрасываем композицию
+                ctx.globalCompositeOperation = 'source-over';
             }
 
             function loadDocumentToView(doc) {
@@ -351,8 +375,6 @@
                     const wrapper = document.createElement('div');
                     wrapper.className = 'pdf-page-wrapper';
 
-                    // Устанавливаем соотношение сторон через padding-bottom (не обязательно, но canvas будет подстраиваться)
-                    // Но мы просто положим canvas внутрь, и через CSS width:100% он займёт всю ширину.
                     const pdfCanvas = document.createElement('canvas');
                     pdfCanvas.width = pageData.width;
                     pdfCanvas.height = pageData.height;
@@ -371,40 +393,27 @@
 
                     pdfContainer.appendChild(wrapper);
 
-                    // Загружаем PDF слой
                     const img = new Image();
                     img.onload = () => {
                         pdfCanvas.getContext('2d').drawImage(img, 0, 0);
                     };
                     img.src = pageData.dataURL;
 
-                    // Загружаем рисунки
                     const strokes = doc.getDrawings(pageNum);
                     redrawDrawings(drawCanvas, strokes);
                 });
 
                 doc.loadFromLocalStorage();
-                updateCommentUIForPage(1);
+                // После загрузки из localStorage обновляем комментарии для текущей страницы
+                const page = 1;
+                commentsHtml.innerHTML = doc.getCommentForPage(page) || '';
+                commentFrom.value = page;
+                commentTo.value = page;
                 pageIndicator.style.display = 'block';
                 pageIndicator.textContent = 'Стр. 1';
             }
 
-            function updateCommentUIForPage(page) {
-                if (activeDocIndex === -1) return;
-                const doc = documents[activeDocIndex];
-                const comment = doc.getCommentForPage(page);
-                commentsText.value = comment;
-                const c = doc.comments.find(c => c.startPage <= page && c.endPage >= page);
-                if (c) {
-                    commentFrom.value = c.startPage;
-                    commentTo.value = c.endPage;
-                } else {
-                    commentFrom.value = page;
-                    commentTo.value = page;
-                }
-            }
-
-            // ---------- Открытие PDF ----------
+            // Открытие PDF
             openPdfBtn.addEventListener('click', () => fileInput.click());
 
             fileInput.addEventListener('change', (e) => {
@@ -439,7 +448,7 @@
 
             function renderPageToDataURL(pdfDoc, pageNum, callback) {
                 pdfDoc.getPage(pageNum).then(page => {
-                    const viewport = page.getViewport({ scale: 1.5 }); // хорошее качество
+                    const viewport = page.getViewport({ scale: 1.5 });
                     const canvas = document.createElement('canvas');
                     canvas.width = viewport.width;
                     canvas.height = viewport.height;
@@ -449,43 +458,52 @@
                 });
             }
 
-            // ---------- Комментарии ----------
-            function onCommentChange() {
+            // Комментарии (contenteditable)
+            commentsHtml.addEventListener('input', () => {
                 if (activeDocIndex === -1) return;
                 const page = getVisiblePage();
                 if (page === -1) return;
-                const from = parseInt(commentFrom.value) || page;
-                const to = parseInt(commentTo.value) || page;
                 const doc = documents[activeDocIndex];
-                doc.setComment(from, to, commentsText.value);
-            }
+                doc.setCommentForPage(page, commentsHtml.innerHTML);
+            });
 
-            commentsText.addEventListener('input', onCommentChange);
-            commentFrom.addEventListener('change', onCommentChange);
-            commentTo.addEventListener('change', onCommentChange);
+            // Вставка изображения по ссылке
+            insertImageBtn.addEventListener('click', () => {
+                const url = prompt('Введите URL изображения:');
+                if (url) {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.onload = () => {
+                        // После загрузки вставляем в commentsHtml
+                        commentsHtml.appendChild(img);
+                        // Сохраняем
+                        if (activeDocIndex !== -1) {
+                            const page = getVisiblePage();
+                            if (page !== -1) {
+                                const doc = documents[activeDocIndex];
+                                doc.setCommentForPage(page, commentsHtml.innerHTML);
+                            }
+                        }
+                    };
+                    img.onerror = () => alert('Не удалось загрузить изображение по ссылке');
+                }
+            });
 
-            // ---------- Обновление индикатора страницы при прокрутке ----------
+            // Обновление комментариев при смене страницы
             pdfPanel.addEventListener('scroll', () => {
                 const page = getVisiblePage();
                 if (page !== -1) {
                     pageIndicator.textContent = `Стр. ${page}`;
                     if (activeDocIndex !== -1) {
                         const doc = documents[activeDocIndex];
-                        const comment = doc.getCommentForPage(page);
-                        commentsText.value = comment;
-                        const c = doc.comments.find(c => c.startPage <= page && c.endPage >= page);
-                        if (c) {
-                            commentFrom.value = c.startPage;
-                            commentTo.value = c.endPage;
-                        } else {
-                            commentFrom.value = page;
-                            commentTo.value = page;
-                        }
+                        commentsHtml.innerHTML = doc.getCommentForPage(page) || '';
+                        commentFrom.value = page;
+                        commentTo.value = page;
                     }
                 }
             });
 
-            // ---------- Разделитель ----------
+            // Разделитель
             let isResizing = false;
             resizer.addEventListener('mousedown', () => { isResizing = true; });
             resizer.addEventListener('touchstart', () => { isResizing = true; });
@@ -510,7 +528,7 @@
             window.addEventListener('mouseup', () => { isResizing = false; });
             window.addEventListener('touchend', () => { isResizing = false; });
 
-            // ---------- Рисование (только стилус) ----------
+            // Рисование (только стилус)
             function getCanvasFromTarget(target) {
                 if (target.classList.contains('draw-canvas')) {
                     return target;
@@ -521,18 +539,16 @@
             function handlePointerDown(e) {
                 if (activeDocIndex === -1) return;
 
-                // Запоминаем pointerId для стилуса, чтобы отслеживать только его
+                // Для стилуса всегда preventDefault, чтобы не было прокрутки
                 if (e.pointerType === 'pen') {
-                    // Если инструмент "ладонь" — не рисуем, просто игнорируем, стандартное поведение (скролл) будет
+                    e.preventDefault();
+
                     if (currentTool === 'hand') {
-                        // Ничего не делаем, браузер сам прокрутит
-                        return;
+                        return; // в режиме руки не рисуем, но preventDefault стоит, так что и не скроллим
                     }
-                    // Начинаем рисование
+
                     const canvas = getCanvasFromTarget(e.target);
                     if (!canvas) return;
-
-                    e.preventDefault(); // предотвращаем скролл во время рисования
 
                     const rect = canvas.getBoundingClientRect();
                     const scaleX = canvas.width / rect.width;
@@ -542,7 +558,8 @@
 
                     currentCanvas = canvas;
                     isDrawing = true;
-                    const color = currentTool === 'eraser' ? '#FFFFFF' : brushColor; // для ластика цвет не важен, используем композицию
+                    // Для ластика используем белый цвет, но при отрисовке будем использовать destination-out
+                    const color = currentTool === 'eraser' ? '#FFFFFF' : brushColor;
                     currentStroke = {
                         points: [{ x, y }],
                         color: color,
@@ -552,23 +569,25 @@
                     const ctx = canvas.getContext('2d');
                     ctx.beginPath();
                     ctx.moveTo(x, y);
-                    ctx.strokeStyle = color;
+                    if (currentTool === 'eraser') {
+                        ctx.globalCompositeOperation = 'destination-out';
+                        ctx.strokeStyle = '#000000'; // цвет не важен
+                    } else {
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.strokeStyle = brushColor;
+                    }
                     ctx.lineWidth = brushSize;
                     ctx.lineCap = 'round';
                     ctx.lineJoin = 'round';
-                    if (currentTool === 'eraser') {
-                        ctx.globalCompositeOperation = 'destination-out'; // стираем
-                    } else {
-                        ctx.globalCompositeOperation = 'source-over';
-                    }
                 }
-                // Для пальца (touch) ничего не делаем, браузер скроллит
+                // Для других типов указателей (пальца) ничего не делаем, прокрутка работает
             }
 
             function handlePointerMove(e) {
                 if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen') return;
 
                 e.preventDefault();
+
                 const canvas = currentCanvas;
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
@@ -594,10 +613,20 @@
                 if (currentStroke.points.length > 1) {
                     const page = parseInt(currentCanvas.dataset.page);
                     const doc = documents[activeDocIndex];
-                    doc.addStroke(page, currentStroke);
+
+                    if (currentTool === 'eraser') {
+                        // Для ластика: нужно удалить все штрихи, пересекающиеся с текущим? 
+                        // Упростим: добавим белый штрих, который при отрисовке будет использовать destination-out.
+                        // Но тогда белые штрихи накапливаются, и если стирать поверх, они будут перекрывать.
+                        // Лучше реализовать удаление из массива: находим штрихи, которые пересекаются с ластиком.
+                        // Для простоты оставим добавление белого штриха, но тогда нужно изменить redrawDrawings,
+                        // чтобы белые штрихи применялись как ластик (уже сделано).
+                        doc.addStroke(page, currentStroke);
+                    } else {
+                        doc.addStroke(page, currentStroke);
+                    }
                 }
 
-                // Сбрасываем композицию для следующего раза
                 const ctx = currentCanvas.getContext('2d');
                 ctx.globalCompositeOperation = 'source-over';
 
@@ -605,13 +634,12 @@
                 currentCanvas = null;
             }
 
-            // Добавляем слушатели pointer events
             document.addEventListener('pointerdown', handlePointerDown);
             document.addEventListener('pointermove', handlePointerMove);
             document.addEventListener('pointerup', handlePointerUp);
             document.addEventListener('pointercancel', handlePointerUp);
 
-            // ---------- Инструменты ----------
+            // Инструменты
             brushBtn.addEventListener('click', () => {
                 currentTool = 'brush';
                 brushBtn.classList.add('active');
@@ -634,23 +662,19 @@
                 brushSizePicker.classList.remove('show');
             });
 
-            // Показ всплывающего окна с позиционированием
+            // Показ всплывающего окна
             function showPicker(btn) {
                 const rect = btn.getBoundingClientRect();
                 let top = rect.bottom + window.scrollY;
                 let left = rect.left + window.scrollX;
-
-                // Корректируем, чтобы окно не выходило за правый край
                 const pickerWidth = brushSizePicker.offsetWidth;
                 if (left + pickerWidth > window.innerWidth) {
                     left = window.innerWidth - pickerWidth - 10;
                 }
-                // Корректируем, если уходит за нижний край
                 const pickerHeight = brushSizePicker.offsetHeight;
                 if (top + pickerHeight > window.innerHeight) {
                     top = rect.top - pickerHeight - 10;
                 }
-
                 brushSizePicker.style.top = top + 'px';
                 brushSizePicker.style.left = left + 'px';
                 brushSizePicker.classList.add('show');
@@ -671,20 +695,18 @@
                 }
             });
 
-            // Слайдер размера
             sizeSlider.addEventListener('input', () => {
                 brushSize = parseInt(sizeSlider.value);
                 sizeValue.textContent = brushSize;
             });
 
-            // Закрытие палитры при клике вне
             document.addEventListener('click', (e) => {
                 if (!brushSizePicker.contains(e.target) && e.target !== brushBtn && e.target !== eraserBtn) {
                     brushSizePicker.classList.remove('show');
                 }
             });
 
-            // ---------- Настройки ----------
+            // Настройки
             function updateStorageInfo() {
                 let total = 0;
                 const fileMap = new Map();
@@ -723,7 +745,7 @@
                         }
                         documents.forEach(doc => {
                             if (doc.name === fname) {
-                                doc.comments = [];
+                                doc.comments = {};
                                 doc.drawings = {};
                             }
                         });
