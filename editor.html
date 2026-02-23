@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PDF Editor с заметками</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f0f2f5; }
+        /* Главное меню */
+        #mainMenu { display: flex; gap: 10px; padding: 10px; background: #fff; border-bottom: 1px solid #ccc; }
+        .menu-btn { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        .menu-btn:active { opacity: 0.8; }
+        /* Синяя панель инструментов */
+        #toolbar { background: #1976D2; color: white; padding: 8px; display: flex; align-items: center; gap: 10px; overflow-x: auto; white-space: nowrap; }
+        #tabContainer { display: flex; flex: 1; gap: 5px; overflow-x: auto; }
+        .tab { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px; cursor: pointer; }
+        .tab.active { background: rgba(255,255,255,0.4); font-weight: bold; }
+        .tool-icon { background: none; border: none; color: white; font-size: 24px; margin: 0 5px; cursor: pointer; padding: 5px; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+        .tool-icon.active { background: rgba(255,255,255,0.3); }
+        .tool-icon:active { background: rgba(255,255,255,0.5); }
+        #saveBtn { margin-left: auto; }
+        /* Основная область с изменяемым разделителем */
+        #mainContainer { flex: 1; display: flex; overflow: hidden; position: relative; }
+        #pdfPanel { background: #e9ecef; overflow: auto; display: flex; justify-content: center; padding: 10px; transition: width 0.05s; }
+        #pdfWrapper { position: relative; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.2); background: white; }
+        #pdfCanvas { display: block; width: 100%; height: auto; pointer-events: none; } /* нижний слой PDF */
+        #drawCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; } /* слой для рисования */
+        #pageIndicator { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 30px; font-weight: bold; z-index: 10; pointer-events: none; }
+        #resizer { width: 8px; background: #aaa; cursor: col-resize; transition: background 0.2s; }
+        #resizer:hover, #resizer:active { background: #1976D2; }
+        #commentsPanel { background: white; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid #ccc; }
+        #commentsHeader { background: #1976D2; color: white; padding: 12px; font-weight: bold; }
+        #commentsText { flex: 1; width: 100%; padding: 15px; font-size: 16px; border: none; resize: none; outline: none; }
+        /* Скрытые input'ы */
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <!-- Главное меню (3 кнопки) -->
+    <div id="mainMenu">
+        <button class="menu-btn" id="openJsonBtn">📂 Открыть JSON</button>
+        <button class="menu-btn" id="convertPdfBtn">📄 PDF → JSON</button>
+        <button class="menu-btn" id="importJsonBtn">📥 Импорт JSON → PDF</button>
+        <input type="file" id="openJsonInput" accept=".json,application/json" class="hidden" />
+        <input type="file" id="convertPdfInput" accept=".pdf,application/pdf" class="hidden" />
+        <input type="file" id="importJsonInput" accept=".json,application/json" class="hidden" />
+    </div>
+
+    <!-- Панель инструментов (синяя) появляется после открытия документа -->
+    <div id="toolbar" style="display: none;">
+        <div id="tabContainer"></div>
+        <button class="tool-icon" id="brushBtn" title="Кисть">🖌️</button>
+        <button class="tool-icon" id="eraserBtn" title="Ластик">🧽</button>
+        <button class="tool-icon" id="imageBtn" title="Вставить изображение">🖼️</button>
+        <button class="tool-icon" id="undoBtn" title="Отменить">↩️</button>
+        <button class="tool-icon" id="redoBtn" title="Повторить">↪️</button>
+        <button class="tool-icon" id="saveBtn" title="Сохранить JSON">💾</button>
+    </div>
+
+    <!-- Основная область с разделителем -->
+    <div id="mainContainer" style="display: none;">
+        <div id="pdfPanel" style="width: 70%;">
+            <div id="pdfWrapper">
+                <canvas id="pdfCanvas"></canvas>
+                <canvas id="drawCanvas"></canvas>
+                <div id="pageIndicator">Стр. 1</div>
+            </div>
+        </div>
+        <div id="resizer"></div>
+        <div id="commentsPanel" style="width: 30%;">
+            <div id="commentsHeader">📝 Комментарии к странице</div>
+            <textarea id="commentsText" placeholder="Введите комментарий..."></textarea>
+        </div>
+    </div>
+
+    <!-- Подключаем PDF.js и jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        (function() {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+            // ---------- Глобальные переменные ----------
+            const documents = [];                // массив открытых документов
+            let activeDocIndex = -1;              // индекс активного документа
+            let currentTool = 'brush';             // 'brush' или 'eraser'
+            let isDrawing = false;
+            let lastX, lastY;
+
+            // Элементы DOM
+            const mainMenu = document.getElementById('mainMenu');
+            const toolbar = document.getElementById('toolbar');
+            const mainContainer = document.getElementById('mainContainer');
+            const tabContainer = document.getElementById('tabContainer');
+            const pdfCanvas = document.getElementById('pdfCanvas');
+            const drawCanvas = document.getElementById('drawCanvas');
+            const ctx = drawCanvas.getContext('2d');
+            const pageIndicator = document.getElementById('pageIndicator');
+            const commentsText = document.getElementById('commentsText');
+            const resizer = document.getElementById('resizer');
+            const pdfPanel = document.getElementById('pdfPanel');
+            const commentsPanel = document.getElementById('commentsPanel');
+
+            // Кнопки меню
+            const openJsonBtn = document.getElementById('openJsonBtn');
+            const convertPdfBtn = document.getElementById('convertPdfBtn');
+            const importJsonBtn = document.getElementById('importJsonBtn');
+            const openJsonInput = document.getElementById('openJsonInput');
+            const convertPdfInput = document.getElementById('convertPdfInput');
+            const importJsonInput = document.getElementById('importJsonInput');
+
+            // Кнопки инструментов
+            const brushBtn = document.getElementById('brushBtn');
+            const eraserBtn = document.getElementById('eraserBtn');
+            const imageBtn = document.getElementById('imageBtn');
+            const undoBtn = document.getElementById('undoBtn');
+            const redoBtn = document.getElementById('redoBtn');
+            const saveBtn = document.getElementById('saveBtn');
+
+            // ---------- Структура документа ----------
+            class PDFDocument {
+                constructor(name = 'Без названия') {
+                    this.name = name;
+                    this.pages = [];                // массив { pdfDataURL, width, height, drawingDataURL (опционально) }
+                    this.comments = [];               // массив { startPage, endPage, text } (пока start=end)
+                    this.currentPage = 1;
+                    this.history = {};                 // для каждой страницы стек { undo: [dataURL], redo: [dataURL] }
+                    this.scale = 1;                     // не используется, но можно расширить
+                }
+
+                // Получить комментарий для страницы
+                getCommentForPage(page) {
+                    const c = this.comments.find(c => c.startPage <= page && c.endPage >= page);
+                    return c ? c.text : '';
+                }
+
+                // Установить комментарий для страницы (если существует диапазон, обновить; иначе создать на одну страницу)
+                setCommentForPage(page, text) {
+                    const existing = this.comments.find(c => c.startPage <= page && c.endPage >= page);
+                    if (existing) {
+                        existing.text = text;
+                    } else {
+                        this.comments.push({ startPage: page, endPage: page, text });
+                    }
+                }
+
+                // Получить drawing dataURL для страницы
+                getDrawing(page) {
+                    return this.pages[page-1]?.drawingDataURL || null;
+                }
+
+                // Сохранить drawing для страницы
+                setDrawing(page, dataURL) {
+                    if (this.pages[page-1]) {
+                        this.pages[page-1].drawingDataURL = dataURL;
+                    }
+                }
+            }
+
+            // ---------- Вспомогательные функции ----------
+            function showMainInterface() {
+                toolbar.style.display = 'flex';
+                mainContainer.style.display = 'flex';
+            }
+
+            // Добавить новую вкладку
+            function addTab(doc, index) {
+                const tab = document.createElement('span');
+                tab.className = 'tab' + (index === activeDocIndex ? ' active' : '');
+                tab.textContent = doc.name;
+                tab.dataset.index = index;
+                tab.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    switchToDocument(parseInt(e.currentTarget.dataset.index));
+                });
+                tabContainer.appendChild(tab);
+            }
+
+            // Обновить все вкладки
+            function renderTabs() {
+                tabContainer.innerHTML = '';
+                documents.forEach((doc, i) => addTab(doc, i));
+            }
+
+            // Переключение на другой документ
+            function switchToDocument(index) {
+                if (index === activeDocIndex || index < 0 || index >= documents.length) return;
+                // Сохраняем текущий документ (рисунок текущей страницы)
+                if (activeDocIndex !== -1) {
+                    saveCurrentDrawingToDoc();
+                }
+                activeDocIndex = index;
+                renderTabs();
+                loadDocumentToView(documents[activeDocIndex]);
+            }
+
+            // Сохранить рисунок текущей страницы в документ
+            function saveCurrentDrawingToDoc() {
+                if (activeDocIndex === -1) return;
+                const doc = documents[activeDocIndex];
+                const page = doc.currentPage;
+                const dataURL = drawCanvas.toDataURL();
+                doc.setDrawing(page, dataURL);
+                // Обновить историю? Пока не трогаем
+            }
+
+            // Загрузить документ в интерфейс
+            function loadDocumentToView(doc) {
+                const page = doc.currentPage;
+                const pageData = doc.pages[page-1];
+                if (!pageData) return;
+
+                // Загружаем PDF слой
+                const img = new Image();
+                img.onload = () => {
+                    pdfCanvas.width = pageData.width;
+                    pdfCanvas.height = pageData.height;
+                    pdfCanvas.getContext('2d').drawImage(img, 0, 0);
+                    // Загружаем слой рисунка
+                    const drawing = doc.getDrawing(page);
+                    drawCanvas.width = pageData.width;
+                    drawCanvas.height = pageData.height;
+                    ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                    if (drawing) {
+                        const drawImg = new Image();
+                        drawImg.onload = () => ctx.drawImage(drawImg, 0, 0);
+                        drawImg.src = drawing;
+                    }
+                    pageIndicator.textContent = `Стр. ${page}`;
+                    // Загружаем комментарий
+                    commentsText.value = doc.getCommentForPage(page);
+                };
+                img.src = pageData.pdfDataURL;
+            }
+
+            // Создать документ из массива страниц (после конвертации PDF или загрузки JSON)
+            function createDocumentFromPages(pagesArray, commentsArray = [], name = 'Документ') {
+                const doc = new PDFDocument(name);
+                doc.pages = pagesArray.map(p => ({ 
+                    pdfDataURL: p.dataURL || p.pdfDataURL, 
+                    width: p.width, 
+                    height: p.height,
+                    drawingDataURL: p.drawingDataURL || null
+                }));
+                doc.comments = commentsArray || [];
+                doc.currentPage = 1;
+                // Инициализируем историю пустыми стеками
+                return doc;
+            }
+
+            // ---------- Конвертация PDF в JSON (рендеринг всех страниц) ----------
+            function convertPdfToPages(pdfFile, callback) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const typedarray = new Uint8Array(e.target.result);
+                    pdfjsLib.getDocument({ data: typedarray }).promise.then(pdfDoc => {
+                        const numPages = pdfDoc.numPages;
+                        const pages = [];
+                        let completed = 0;
+                        for (let i = 1; i <= numPages; i++) {
+                            renderPageToDataURL(pdfDoc, i, (dataURL, width, height) => {
+                                pages.push({ dataURL, width, height, drawingDataURL: null });
+                                completed++;
+                                if (completed === numPages) {
+                                    callback(pages);
+                                }
+                            });
+                        }
+                    }).catch(err => alert('Ошибка PDF: ' + err.message));
+                };
+                reader.readAsArrayBuffer(pdfFile);
+            }
+
+            function renderPageToDataURL(pdfDoc, pageNum, callback) {
+                pdfDoc.getPage(pageNum).then(page => {
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise.then(() => {
+                        callback(canvas.toDataURL('image/png'), viewport.width, viewport.height);
+                    });
+                });
+            }
+
+            // ---------- Обработчики главного меню ----------
+            openJsonBtn.addEventListener('click', () => openJsonInput.click());
+            openJsonInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        if (!Array.isArray(data.pages) && !Array.isArray(data)) {
+                            throw new Error('Неверный формат JSON');
+                        }
+                        // Если data - массив страниц (старый формат), то создаём документ с пустыми комментариями
+                        const pages = Array.isArray(data) ? data : data.pages;
+                        const comments = data.comments || [];
+                        const doc = createDocumentFromPages(pages, comments, file.name);
+                        documents.push(doc);
+                        renderTabs();
+                        switchToDocument(documents.length-1);
+                        showMainInterface();
+                    } catch (err) {
+                        alert('Ошибка чтения JSON: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+                openJsonInput.value = '';
+            });
+
+            convertPdfBtn.addEventListener('click', () => convertPdfInput.click());
+            convertPdfInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                convertPdfToPages(file, (pages) => {
+                    const doc = createDocumentFromPages(pages, [], file.name);
+                    documents.push(doc);
+                    renderTabs();
+                    switchToDocument(documents.length-1);
+                    showMainInterface();
+                });
+                convertPdfInput.value = '';
+            });
+
+            importJsonBtn.addEventListener('click', () => importJsonInput.click());
+            importJsonInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        const pages = Array.isArray(data) ? data : data.pages;
+                        if (!pages || !pages.length) throw new Error('Нет страниц');
+                        // Создаём PDF из изображений с помощью jsPDF
+                        const { jsPDF } = window.jspdf;
+                        // Для первой страницы определяем ориентацию
+                        const first = pages[0];
+                        const pdf = new jsPDF({
+                            orientation: first.width > first.height ? 'landscape' : 'portrait',
+                            unit: 'pt',
+                            format: [first.width, first.height]
+                        });
+                        // Добавляем страницы
+                        (async () => {
+                            for (let i = 0; i < pages.length; i++) {
+                                if (i > 0) {
+                                    pdf.addPage([pages[i].width, pages[i].height], pages[i].width > pages[i].height ? 'landscape' : 'portrait');
+                                }
+                                pdf.addImage(pages[i].dataURL || pages[i].pdfDataURL, 'PNG', 0, 0, pages[i].width, pages[i].height, undefined, 'FAST');
+                            }
+                            pdf.save('imported.pdf');
+                        })();
+                    } catch (err) {
+                        alert('Ошибка импорта: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+                importJsonInput.value = '';
+            });
+
+            // ---------- Инструменты рисования ----------
+            function startDrawing(e) {
+                e.preventDefault();
+                isDrawing = true;
+                const rect = drawCanvas.getBoundingClientRect();
+                const scaleX = drawCanvas.width / rect.width;
+                const scaleY = drawCanvas.height / rect.height;
+                let clientX, clientY;
+                if (e.touches) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                lastX = (clientX - rect.left) * scaleX;
+                lastY = (clientY - rect.top) * scaleY;
+
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                if (currentTool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.strokeStyle = 'rgba(0,0,0,1)'; // цвет не важен
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = '#FF0000'; // красный для заметок
+                }
+            }
+
+            function draw(e) {
+                if (!isDrawing) return;
+                e.preventDefault();
+                const rect = drawCanvas.getBoundingClientRect();
+                const scaleX = drawCanvas.width / rect.width;
+                const scaleY = drawCanvas.height / rect.height;
+                let clientX, clientY;
+                if (e.touches) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                const x = (clientX - rect.left) * scaleX;
+                const y = (clientY - rect.top) * scaleY;
+
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }
+
+            function stopDrawing() {
+                if (isDrawing) {
+                    isDrawing = false;
+                    ctx.globalCompositeOperation = 'source-over'; // сброс
+                    // Сохраняем состояние в историю (упрощённо без истории)
+                    if (activeDocIndex !== -1) {
+                        const doc = documents[activeDocIndex];
+                        const page = doc.currentPage;
+                        const dataURL = drawCanvas.toDataURL();
+                        doc.setDrawing(page, dataURL);
+                    }
+                }
+            }
+
+            // Подписка на события рисования
+            drawCanvas.addEventListener('mousedown', startDrawing);
+            drawCanvas.addEventListener('mousemove', draw);
+            drawCanvas.addEventListener('mouseup', stopDrawing);
+            drawCanvas.addEventListener('mouseleave', stopDrawing);
+            drawCanvas.addEventListener('touchstart', startDrawing, { passive: false });
+            drawCanvas.addEventListener('touchmove', draw, { passive: false });
+            drawCanvas.addEventListener('touchend', stopDrawing);
+            drawCanvas.addEventListener('touchcancel', stopDrawing);
+
+            // Переключение инструментов
+            brushBtn.addEventListener('click', () => {
+                currentTool = 'brush';
+                brushBtn.classList.add('active');
+                eraserBtn.classList.remove('active');
+            });
+            eraserBtn.addEventListener('click', () => {
+                currentTool = 'eraser';
+                eraserBtn.classList.add('active');
+                brushBtn.classList.remove('active');
+            });
+            brushBtn.classList.add('active'); // по умолчанию
+
+            // Вставка изображения (заглушка)
+            imageBtn.addEventListener('click', () => {
+                alert('Функция вставки изображения будет добавлена позже');
+            });
+
+            // Undo/Redo (заглушки)
+            undoBtn.addEventListener('click', () => alert('Undo не реализовано'));
+            redoBtn.addEventListener('click', () => alert('Redo не реализовано'));
+
+            // Сохранить JSON
+            saveBtn.addEventListener('click', () => {
+                if (activeDocIndex === -1) return;
+                const doc = documents[activeDocIndex];
+                // Сохраняем текущий рисунок
+                saveCurrentDrawingToDoc();
+                // Подготавливаем объект для экспорта
+                const exportObj = {
+                    pages: doc.pages.map(p => ({
+                        pdfDataURL: p.pdfDataURL,
+                        width: p.width,
+                        height: p.height,
+                        drawingDataURL: p.drawingDataURL || null
+                    })),
+                    comments: doc.comments
+                };
+                const jsonStr = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = doc.name + '.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+            // ---------- Комментарии ----------
+            commentsText.addEventListener('input', () => {
+                if (activeDocIndex === -1) return;
+                const doc = documents[activeDocIndex];
+                const page = doc.currentPage;
+                doc.setCommentForPage(page, commentsText.value);
+            });
+
+            // ---------- Переключение страниц (колесо мыши, свайп - упрощённо через плавающий номер) ----------
+            // Для демо добавим кнопки в индикатор (клик на номер увеличивает страницу)
+            pageIndicator.addEventListener('click', () => {
+                if (activeDocIndex === -1) return;
+                const doc = documents[activeDocIndex];
+                let newPage = doc.currentPage + 1;
+                if (newPage > doc.pages.length) newPage = 1;
+                // Сохраняем текущий рисунок перед сменой
+                saveCurrentDrawingToDoc();
+                doc.currentPage = newPage;
+                loadDocumentToView(doc);
+            });
+
+            // ---------- Изменение размера окон через разделитель ----------
+            let isResizing = false;
+            resizer.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                e.preventDefault();
+            });
+            resizer.addEventListener('touchstart', (e) => {
+                isResizing = true;
+                e.preventDefault();
+            });
+            window.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const containerRect = mainContainer.getBoundingClientRect();
+                let newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+                if (newWidth < 20) newWidth = 20;
+                if (newWidth > 80) newWidth = 80;
+                pdfPanel.style.width = newWidth + '%';
+                commentsPanel.style.width = (100 - newWidth) + '%';
+            });
+            window.addEventListener('touchmove', (e) => {
+                if (!isResizing) return;
+                const containerRect = mainContainer.getBoundingClientRect();
+                let newWidth = ((e.touches[0].clientX - containerRect.left) / containerRect.width) * 100;
+                if (newWidth < 20) newWidth = 20;
+                if (newWidth > 80) newWidth = 80;
+                pdfPanel.style.width = newWidth + '%';
+                commentsPanel.style.width = (100 - newWidth) + '%';
+            });
+            window.addEventListener('mouseup', () => { isResizing = false; });
+            window.addEventListener('touchend', () => { isResizing = false; });
+
+            // Инициализация: главное меню видно, остальное скрыто
+        })();
+    </script>
+</body>
+</html>
