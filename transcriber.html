@@ -2,94 +2,500 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M4A → Текст (Whisper WASM)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Whisper WASM – локальная транскрибация M4A</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 500px; margin: 20px auto; padding: 20px; background: #f8f9fa; }
-        h1 { color: #007aff; text-align: center; }
-        input, button { display: block; width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-        button { background: #007aff; color: white; border: none; cursor: pointer; }
-        button:disabled { background: #ccc; }
-        #status, #progress { text-align: center; margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 5px; }
-        #result { margin-top: 20px; padding: 20px; background: white; border: 1px solid #ddd; border-radius: 8px; min-height: 120px; white-space: pre-wrap; font-family: monospace; }
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #f9fafb 0%, #eef1f5 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 32px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 560px;
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #1e293b;
+            letter-spacing: -0.02em;
+        }
+        .subtitle {
+            color: #475569;
+            margin-bottom: 28px;
+            font-size: 1rem;
+            border-left: 4px solid #3b82f6;
+            padding-left: 16px;
+            background: rgba(59,130,246,0.05);
+            border-radius: 0 12px 12px 0;
+        }
+        .section {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+            border: 1px solid #e9eef2;
+        }
+        .section-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 16px;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title span {
+            background: #3b82f6;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+        button {
+            background: #3b82f6;
+            border: none;
+            color: white;
+            font-weight: 500;
+            font-size: 1rem;
+            padding: 14px 24px;
+            border-radius: 60px;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 0 8px 20px -8px #3b82f680;
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 12px;
+        }
+        button:active {
+            transform: scale(0.97);
+            background: #2563eb;
+            box-shadow: 0 4px 12px -6px #1e3a8a;
+        }
+        button:disabled {
+            opacity: 0.4;
+            transform: none;
+            pointer-events: none;
+            box-shadow: none;
+        }
+        .file-input-wrapper {
+            position: relative;
+            margin-bottom: 16px;
+        }
+        .file-label {
+            display: block;
+            background: #f1f5f9;
+            border: 2px dashed #94a3b8;
+            border-radius: 60px;
+            padding: 14px 24px;
+            text-align: center;
+            color: #334155;
+            font-weight: 500;
+            transition: background 0.1s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-label.highlight {
+            background: #e0f2fe;
+            border-color: #3b82f6;
+            color: #0c4a6e;
+        }
+        input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .status {
+            background: #f8fafc;
+            border-radius: 40px;
+            padding: 12px 18px;
+            margin: 12px 0 20px;
+            font-size: 0.95rem;
+            border-left: 6px solid #94a3b8;
+            color: #1e293b;
+            word-break: break-word;
+        }
+        .status.success {
+            border-left-color: #22c55e;
+            background: #f0fdf4;
+        }
+        .status.error {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+        .status.warning {
+            border-left-color: #f59e0b;
+            background: #fffbeb;
+        }
+        .progress-bar {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 40px;
+            margin: 16px 0 8px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #3b82f6;
+            transition: width 0.2s ease;
+        }
+        .output-box {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 20px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+            margin-top: 20px;
+        }
+        .small-note {
+            color: #64748b;
+            font-size: 0.85rem;
+            text-align: center;
+            margin-top: 16px;
+        }
+        .flex-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
-    <h1>🎤 M4A в текст</h1>
-    <p>Загрузите модель <a href="models/" target="_blank">здесь</a> (ggml-base.en.bin или ggml-base-ru.bin), затем M4A файл.</p>
-    
-    <input type="file" id="audioFile" accept="audio/m4a,audio/mp4,audio/wav">
-    <button id="transcribeBtn" disabled>Транскрибировать (Рус/Eng)</button>
-    
-    <div id="progress" style="display:none;">Обработка: <span id="prog">0%</span></div>
-    <div id="status">Выберите модель и аудио</div>
-    <div id="result">Результат...</div>
+    <div class="card">
+        <h1>🎤 Whisper · локально</h1>
+        <div class="subtitle">M4A → текст на iPhone/iPad через WebAssembly</div>
 
-    <!-- Вставьте whisper.wasm скрипты (скачайте из демо) -->
-    <script src="https://unpkg.com/@tensorflow/tfjs"></script> <!-- Если нужно для аудио -->
-    <!-- Или локально: <script src="whisper.js"></script> из https://github.com/timur00kh/whisper.wasm -->
+        <!-- Секция загрузки модели -->
+        <div class="section">
+            <div class="section-title"><span>①</span> Загрузка модели</div>
+            <div class="file-input-wrapper">
+                <label for="modelFile" class="file-label" id="modelFileLabel">Выберите файл модели (.bin)</label>
+                <input type="file" id="modelFile" accept=".bin,.bin">
+            </div>
+            <button id="loadModelBtn" disabled>⬇️ Сначала выберите файл</button>
+            <div id="modelStatus" class="status warning">⏳ Модель не загружена</div>
+            <div class="progress-bar" id="modelProgressContainer" style="display: none;">
+                <div class="progress-fill" id="modelProgressFill"></div>
+            </div>
+        </div>
+
+        <!-- Секция аудио (появится после загрузки модели) -->
+        <div class="section" id="audioSection" style="opacity:0.5; pointer-events:none;">
+            <div class="section-title"><span>②</span> Выберите аудио (M4A)</div>
+            <div class="file-input-wrapper">
+                <label for="audioFile" class="file-label" id="audioFileLabel">Файл не выбран</label>
+                <input type="file" id="audioFile" accept=".m4a,audio/m4a,audio/mp4">
+            </div>
+            <button id="transcribeBtn" disabled>🎙 Распознать речь</button>
+        </div>
+
+        <!-- Результат -->
+        <div id="outputContainer" style="display: none;">
+            <div class="section-title"><span>③</span> Текст</div>
+            <div class="output-box" id="transcriptionOutput"></div>
+        </div>
+
+        <div class="small-note">
+            ⚡ Модель и whisper.wasm должны лежать рядом с HTML.<br>
+            Поддерживаются файлы .bin от whisper.cpp (tiny, base, small…).
+        </div>
+    </div>
+
+    <!-- Подключаем whisper.js (предполагается, что он в той же папке) -->
+    <script src="whisper.js"></script>
 
     <script>
-        const Whisper = {}; // Placeholder для whisper.wasm API
-        // Загрузка готового whisper.wasm (адаптируйте)
-        // В репо добавьте whisper.wasm файлы из https://github.com/timur00kh/whisper.wasm/tree/main/demo
+        (function() {
+            // --- Глобальные переменные ---
+            let whisperInstance = null;          // объект, возвращаемый Module
+            let modelLoaded = false;
+            let audioContext = null;
+            let pcmData = null;                  // обработанный PCM для передачи в модель
 
-        let audioCtx = null;
-        const audioFile = document.getElementById('audioFile');
-        const transcribeBtn = document.getElementById('transcribeBtn');
-        const status = document.getElementById('status');
-        const progress = document.getElementById('progress');
-        const prog = document.getElementById('prog');
-        const result = document.getElementById('result');
+            // DOM элементы
+            const modelFileInput = document.getElementById('modelFile');
+            const modelFileLabel = document.getElementById('modelFileLabel');
+            const loadModelBtn = document.getElementById('loadModelBtn');
+            const modelStatus = document.getElementById('modelStatus');
+            const modelProgressContainer = document.getElementById('modelProgressContainer');
+            const modelProgressFill = document.getElementById('modelProgressFill');
+            const audioSection = document.getElementById('audioSection');
+            const audioFileInput = document.getElementById('audioFile');
+            const audioFileLabel = document.getElementById('audioFileLabel');
+            const transcribeBtn = document.getElementById('transcribeBtn');
+            const outputContainer = document.getElementById('outputContainer');
+            const transcriptionOutput = document.getElementById('transcriptionOutput');
 
-        // Декод M4A в 16kHz PCM
-        async function m4aToPCM(file) {
-            if (!audioCtx) audioCtx = new AudioContext({ sampleRate: 16000 });
-            const buffer = await file.arrayBuffer();
-            const audioBuf = await audioCtx.decodeAudioData(buffer);
-            const pcm = audioCtx.createBuffer(1, audioBuf.length, 16000);
-            const channelData = audioBuf.getChannelData(0);
-            pcm.copyToChannel(channelData, 0);
-            return pcm.getChannelData(0);
-        }
-
-        // Транскрипция (пример API whisper.cpp wasm)
-        async function transcribe(pcm) {
-            // Адаптируйте под ваш WASM:
-            // const ctx = Whisper.create_context('models/ggml-base.bin');
-            // const res = Whisper.full(ctx, pcm);
-            // return Whisper.full_get_segment(ctx, 0);
-            
-            // Placeholder - замените на реальный вызов
-            status.textContent = 'Транскрипция... (замените на whisper.transcribe(pcm, {language: "ru"}))';
-            await new Promise(r => setTimeout(r, 2000)); // Симуляция
-            return 'Пример текста: "Это распознанный русский с английским". Точный текст от Whisper.';
-        }
-
-        audioFile.onchange = () => {
-            transcribeBtn.disabled = !audioFile.files[0];
-        };
-
-        transcribeBtn.onclick = async () => {
-            const file = audioFile.files[0];
-            if (!file) return;
-            
-            transcribeBtn.disabled = true;
-            status.textContent = 'Декодирование M4A...';
-            progress.style.display = 'block';
-
-            try {
-                const pcm = await m4aToPCM(file);
-                prog.textContent = '50%';
-                const text = await transcribe(pcm);
-                result.textContent = text;
-                status.textContent = 'Готово!';
-            } catch (e) {
-                status.textContent = `Ошибка: ${e.message}`;
+            // --- Вспомогательные функции ---
+            function setModelStatus(text, type = 'warning') {
+                modelStatus.innerText = text;
+                modelStatus.className = 'status ' + type;
             }
-            progress.style.display = 'none';
-            transcribeBtn.disabled = false;
-        };
+
+            function updateModelProgress(percent) {
+                modelProgressFill.style.width = percent + '%';
+            }
+
+            // Показать/скрыть прогресс-бар
+            function showProgress(show) {
+                modelProgressContainer.style.display = show ? 'block' : 'none';
+            }
+
+            // Активировать секцию аудио после загрузки модели
+            function enableAudioSection(enable) {
+                if (enable) {
+                    audioSection.style.opacity = '1';
+                    audioSection.style.pointerEvents = 'auto';
+                } else {
+                    audioSection.style.opacity = '0.5';
+                    audioSection.style.pointerEvents = 'none';
+                }
+            }
+
+            // --- Загрузка модели из выбранного файла ---
+            async function loadModelFromFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const arrayBuffer = e.target.result;
+                            const uint8Array = new Uint8Array(arrayBuffer);
+
+                            // Используем виртуальную файловую систему Emscripten (FS)
+                            if (!Module || !Module.FS) {
+                                throw new Error('Модуль whisper.js не загружен или не содержит FS');
+                            }
+
+                            // Записываем файл модели под именем /model.bin
+                            Module.FS.writeFile('/model.bin', uint8Array);
+
+                            // Инициализируем Whisper
+                            // Предполагается, что в whisper.js есть функция init_whisper или аналогичная.
+                            // В типовом примере whisper.cpp используется:
+                            // let context = whisper_init('/model.bin');
+                            if (typeof whisper_init !== 'function') {
+                                throw new Error('Функция whisper_init не найдена. Убедитесь, что whisper.js корректен.');
+                            }
+
+                            const ctx = whisper_init('/model.bin');
+                            if (!ctx) {
+                                throw new Error('Не удалось инициализировать контекст модели');
+                            }
+
+                            whisperInstance = ctx;
+                            modelLoaded = true;
+                            resolve();
+                        } catch (err) {
+                            reject(err);
+                        }
+                    };
+                    reader.onerror = () => reject(new Error('Ошибка чтения файла'));
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            // Обработчик выбора файла модели
+            modelFileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    modelFileLabel.innerText = file.name.length > 30 ? file.name.substr(0,27)+'…' : file.name;
+                    loadModelBtn.disabled = false;
+                    loadModelBtn.innerText = '📦 Загрузить модель';
+                } else {
+                    modelFileLabel.innerText = 'Выберите файл модели (.bin)';
+                    loadModelBtn.disabled = true;
+                }
+            });
+
+            // Нажатие на кнопку загрузки модели
+            loadModelBtn.addEventListener('click', async function() {
+                const file = modelFileInput.files[0];
+                if (!file) {
+                    setModelStatus('Сначала выберите файл модели', 'error');
+                    return;
+                }
+
+                // Деактивируем кнопки и показываем прогресс
+                loadModelBtn.disabled = true;
+                modelFileInput.disabled = true;
+                setModelStatus('⏳ Загрузка и инициализация модели...', 'warning');
+                showProgress(true);
+                updateModelProgress(10); // имитация
+
+                try {
+                    // Сам процесс записи файла и инициализации
+                    await loadModelFromFile(file);
+                    updateModelProgress(100);
+                    setModelStatus('✅ Модель успешно загружена и готова к работе', 'success');
+                    enableAudioSection(true);
+                } catch (err) {
+                    console.error(err);
+                    setModelStatus('❌ Ошибка: ' + err.message, 'error');
+                    showProgress(false);
+                    loadModelBtn.disabled = false;  // можно попробовать снова
+                    modelFileInput.disabled = false;
+                }
+            });
+
+            // --- Обработка аудиофайла (M4A -> PCM) ---
+            audioFileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    audioFileLabel.innerText = file.name.length > 30 ? file.name.substr(0,27)+'…' : file.name;
+                    transcribeBtn.disabled = false;
+                } else {
+                    audioFileLabel.innerText = 'Файл не выбран';
+                    transcribeBtn.disabled = true;
+                }
+            });
+
+            // Функция декодирования аудио в PCM (16 кГц, моно, float32)
+            async function decodeAudioToPCM(file) {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 16000  // Whisper ожидает 16 кГц
+                    });
+                }
+
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // Ресемплинг до 16 кГц, если нужно
+                let samples;
+                if (audioBuffer.sampleRate === 16000 && audioBuffer.numberOfChannels === 1) {
+                    samples = audioBuffer.getChannelData(0); // Float32 от -1 до 1
+                } else {
+                    // Микшируем до моно и ресемплируем
+                    const offlineCtx = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
+                    const source = offlineCtx.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(offlineCtx.destination);
+                    source.start();
+                    const renderedBuffer = await offlineCtx.startRendering();
+                    samples = renderedBuffer.getChannelData(0);
+                }
+                return samples;
+            }
+
+            // Преобразование float32 в int16 (для whisper)
+            function float32ToInt16(float32Array) {
+                const int16Array = new Int16Array(float32Array.length);
+                for (let i = 0; i < float32Array.length; i++) {
+                    let s = Math.max(-1, Math.min(1, float32Array[i]));
+                    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                return int16Array;
+            }
+
+            // Запуск транскрибации
+            transcribeBtn.addEventListener('click', async function() {
+                const file = audioFileInput.files[0];
+                if (!file) {
+                    alert('Выберите аудиофайл');
+                    return;
+                }
+
+                if (!modelLoaded || !whisperInstance) {
+                    alert('Модель не загружена');
+                    return;
+                }
+
+                transcribeBtn.disabled = true;
+                transcribeBtn.innerText = '⏳ Обработка...';
+
+                try {
+                    // 1. Декодируем в PCM float32
+                    const floatSamples = await decodeAudioToPCM(file);
+
+                    // 2. Конвертируем в int16 (Whisper ожидает int16)
+                    const int16Samples = float32ToInt16(floatSamples);
+
+                    // 3. Передаём в whisper_full (функция должна быть доступна из whisper.js)
+                    // Типовой вызов: whisper_full(context, params, samples, length)
+                    if (typeof whisper_full === 'undefined') {
+                        throw new Error('Функция whisper_full не найдена');
+                    }
+
+                    // Настраиваем параметры (можно расширить)
+                    const params = {
+                        language: 'en',
+                        n_threads: 4,
+                        // ... другие параметры по умолчанию
+                    };
+
+                    // Вызов синхронной функции (может заблокировать UI, лучше использовать воркер, но для примера так)
+                    // В реальном проекте используйте асинхронную версию или Worker
+                    const result = whisper_full(whisperInstance, params, int16Samples, int16Samples.length);
+
+                    // 4. Получаем текст (предполагаем, что whisper_full возвращает строку)
+                    // В разных версиях может быть по-разному: результат может лежать в буфере, который надо извлечь.
+                    // Ниже типовой способ для whisper.cpp WASM:
+                    let text = '';
+                    const nSegments = whisper_full_n_segments(whisperInstance); // может быть функция
+                    for (let i = 0; i < nSegments; i++) {
+                        text += whisper_full_get_segment_text(whisperInstance, i);
+                    }
+
+                    if (!text) text = '[Распознавание не дало результата]';
+
+                    // Показываем результат
+                    transcriptionOutput.innerText = text;
+                    outputContainer.style.display = 'block';
+                } catch (err) {
+                    console.error(err);
+                    alert('Ошибка транскрибации: ' + err.message);
+                } finally {
+                    transcribeBtn.disabled = false;
+                    transcribeBtn.innerText = '🎙 Распознать речь';
+                }
+            });
+
+            // Имитация загрузки whisper.js (иногда Module становится доступен не сразу)
+            // Проверяем наличие глобального Module или функций
+            function checkWhisperLibrary() {
+                if (typeof whisper_init === 'function') {
+                    console.log('whisper.js загружен');
+                } else {
+                    console.warn('whisper.js не загружен или не содержит функций. Поместите whisper.js в ту же папку.');
+                    setModelStatus('⚠️ whisper.js не найден. Добавьте файл рядом с HTML.', 'error');
+                }
+            }
+            setTimeout(checkWhisperLibrary, 500);
+        })();
     </script>
 </body>
 </html>
