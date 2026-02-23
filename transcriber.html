@@ -2,483 +2,134 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>M4A в текст — Whisper WASM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M4A → Текст (Whisper WASM)</title>
     <style>
-        /* Стили (без изменений, можно скопировать из предыдущего ответа) */
-        * {
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        }
-        body {
-            background: #f5f7fa;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 16px;
-        }
-        .card {
-            background: white;
-            border-radius: 24px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-            max-width: 600px;
-            width: 100%;
-            padding: 24px;
-            transition: all 0.2s ease;
-        }
-        h1 {
-            font-size: 28px;
-            font-weight: 600;
-            margin: 0 0 8px 0;
-            color: #1c1e24;
-            letter-spacing: -0.02em;
-        }
-        .subtitle {
-            font-size: 16px;
-            color: #5b5f67;
-            margin-bottom: 24px;
-        }
-        .file-area {
-            background: #f8f9fc;
-            border: 2px dashed #cbd5e1;
-            border-radius: 20px;
-            padding: 32px 16px;
-            text-align: center;
-            margin-bottom: 24px;
-            transition: border-color 0.2s;
-            cursor: pointer;
-        }
-        .file-area:hover {
-            border-color: #007aff;
-        }
-        .file-area.dragover {
-            border-color: #007aff;
-            background: #e8f0fe;
-        }
-        .file-icon {
-            font-size: 42px;
-            margin-bottom: 12px;
-            color: #007aff;
-        }
-        .file-label {
-            font-weight: 500;
-            color: #1c1e24;
-            background: white;
-            padding: 8px 20px;
-            border-radius: 40px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            display: inline-block;
-            margin-bottom: 12px;
-            border: 1px solid #e2e8f0;
-        }
-        .file-name {
-            font-size: 14px;
-            color: #5b5f67;
-            word-break: break-word;
-        }
-        .status {
-            background: #f1f4f9;
-            border-radius: 16px;
-            padding: 16px;
-            margin: 20px 0;
-            font-size: 15px;
-            color: #2d3748;
-            min-height: 60px;
-        }
-        .progress-bar {
-            height: 8px;
-            background: #e2e8f0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 16px 0 8px;
-            display: none;
-        }
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background: #007aff;
-            transition: width 0.2s;
-        }
-        .progress-text {
-            font-size: 13px;
-            color: #007aff;
-            text-align: right;
-        }
-        .result-box {
-            background: #ffffff;
-            border: 1px solid #e9edf2;
-            border-radius: 20px;
-            padding: 20px;
-            margin-top: 24px;
-            max-height: 300px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-word;
-            font-size: 16px;
-            line-height: 1.5;
-            color: #1c1e24;
-        }
-        .result-label {
-            font-weight: 600;
-            font-size: 15px;
-            margin-bottom: 10px;
-            color: #007aff;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .button {
-            background: #007aff;
-            color: white;
-            border: none;
-            border-radius: 60px;
-            padding: 16px 32px;
-            font-size: 18px;
-            font-weight: 500;
-            width: 100%;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 4px 14px rgba(0,122,255,0.4);
-            margin-top: 16px;
-        }
-        .button:active {
-            transform: scale(0.98);
-        }
-        .button:disabled {
-            background: #a0c4ff;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-        .button.secondary {
-            background: #eef2f6;
-            color: #1c1e24;
-            box-shadow: none;
-            margin-top: 12px;
-        }
-        .footer {
-            font-size: 12px;
-            color: #8e94a0;
-            text-align: center;
-            margin-top: 24px;
-        }
-        .warning {
-            background: #fff9db;
-            border-left: 4px solid #f1c40f;
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            margin: 20px 0;
-            color: #5e4b1c;
-        }
+        body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f7; color: #1d1d1f; }
+        h1 { text-align: center; color: #007aff; }
+        #fileInput { width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 10px; background: white; font-size: 16px; }
+        button { width: 100%; padding: 16px; background: #007aff; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 600; margin: 10px 0; cursor: pointer; }
+        button:disabled { background: #c7c7cc; cursor: not-allowed; }
+        #progress { margin: 20px 0; padding: 15px; background: #e5e5ea; border-radius: 10px; text-align: center; display: none; }
+        #result { margin-top: 20px; padding: 20px; background: white; border-radius: 10px; border: 1px solid #d2d2d7; white-space: pre-wrap; min-height: 100px; font-family: monospace; }
+        #status { text-align: center; color: #86868b; margin: 10px 0; }
     </style>
-    <!-- ПРАВИЛЬНОЕ ПОДКЛЮЧЕНИЕ: используем UMD-версию -->
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js"></script>
 </head>
 <body>
-    <div class="card">
-        <h1>🎙️ M4A → Текст</h1>
-        <div class="subtitle">Преобразование речи в текст на устройстве (WebAssembly + Whisper)</div>
-
-        <!-- Область выбора файла -->
-        <div class="file-area" id="dropArea">
-            <div class="file-icon">📁</div>
-            <div class="file-label">Выберите файл M4A</div>
-            <div class="file-name" id="fileName">или перетащите его сюда</div>
-            <input type="file" id="fileInput" accept=".m4a,audio/m4a,audio/mp4" style="display: none;">
-        </div>
-
-        <!-- Статус и прогресс -->
-        <div class="status" id="status">Ожидание файла...</div>
-        <div class="progress-bar" id="progressBar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
-        <div class="progress-text" id="progressText"></div>
-
-        <!-- Кнопки -->
-        <button class="button" id="transcribeBtn" disabled>▶️ Начать распознавание</button>
-        <button class="button secondary" id="resetBtn">🔄 Сбросить</button>
-
-        <!-- Результат -->
-        <div id="resultContainer" style="display: none;">
-            <div class="result-label">
-                <span>📝 Распознанный текст</span>
-            </div>
-            <div class="result-box" id="resultText"></div>
-        </div>
-
-        <!-- Предупреждение о загрузке модели -->
-        <div class="warning" id="modelWarning">
-            ⚡ При первом использовании будет загружена модель распознавания (~150 МБ). Это происходит один раз и сохраняется в кеш браузера.
-        </div>
-
-        <div class="footer">
-            Работает полностью локально, на базе Whisper Tiny (ONNX WebAssembly)
-        </div>
-    </div>
+    <h1>🎤 M4A в текст (Русский + English)</h1>
+    <p>Выберите M4A файл (iPhone/iPad Safari). Транскрипция локально через Whisper WASM.</p>
+    
+    <input type="file" id="fileInput" accept="audio/m4a,audio/mp4" />
+    <button id="transcribeBtn" disabled>Транскрибировать</button>
+    
+    <div id="progress">Загрузка модели... <span id="progressText">0%</span></div>
+    <div id="status">Выберите файл для начала</div>
+    <div id="result">Результат появится здесь...</div>
 
     <script>
-        (function() {
-            // Глобальные переменные
-            const fileInput = document.getElementById('fileInput');
-            const dropArea = document.getElementById('dropArea');
-            const fileNameSpan = document.getElementById('fileName');
-            const statusDiv = document.getElementById('status');
-            const transcribeBtn = document.getElementById('transcribeBtn');
-            const resetBtn = document.getElementById('resetBtn');
-            const progressBar = document.getElementById('progressBar');
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            const resultContainer = document.getElementById('resultContainer');
-            const resultText = document.getElementById('resultText');
-            const modelWarning = document.getElementById('modelWarning');
+        const fileInput = document.getElementById('fileInput');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const progress = document.getElementById('progress');
+        const progressText = document.getElementById('progressText');
+        const status = document.getElementById('status');
+        const result = document.getElementById('result');
 
-            let selectedFile = null;
-            let pipeline = null;          // объект распознавания
-            let isModelLoading = false;
-            let isTranscribing = false;
+        let audioContext;
+        let whisperModule = null; // Будет загружено из WASM
 
-            // Проверка, что Transformers загрузился
-            if (typeof Transformers === 'undefined') {
-                setStatus('❌ Ошибка: библиотека Transformers не загрузилась. Проверьте интернет-соединение.', true);
-                console.error('Transformers is not defined. CDN may be blocked.');
-            } else {
-                console.log('Transformers loaded successfully');
-            }
+        // Инициализация Whisper WASM (адаптируйте под ваш билд)
+        async function initWhisper() {
+            status.textContent = 'Инициализация Whisper WASM...';
+            progress.style.display = 'block';
+            
+            // Пример для whisper.wasm или stream.wasm - скачайте с GitHub
+            // Замените на ваш URL модели и WASM файлы
+            const modelUrl = 'models/ggml-base-ru.bin'; // ~150MB, русский
+            // Пример загрузки Emscripten билда (stream.js из whisper.cpp)
+            importScripts('libstream.js'); // Или динамический import
+            
+            // Загрузка модели (пример для whisper.cpp wasm демо)
+            whisperModule = await Emscripten.WASM; // Адаптировать под реальный билд
+            // whisperModule = await import('./whisper.wasm.js');
+            
+            // Загрузка модели
+            await whisperModule.init(modelUrl);
+            progress.style.display = 'none';
+            status.textContent = 'Готово! Выберите M4A файл.';
+        }
 
-            // ---- Вспомогательные функции ----
-
-            function setStatus(msg, isError = false) {
-                statusDiv.textContent = msg;
-                if (isError) {
-                    statusDiv.style.background = '#fee9e7';
-                    statusDiv.style.color = '#b91c1c';
-                } else {
-                    statusDiv.style.background = '#f1f4f9';
-                    statusDiv.style.color = '#2d3748';
+        // Декодирование M4A в PCM float32 16kHz
+        async function decodeM4AToPCM(file) {
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            
+            status.textContent = 'Декодирование аудио...';
+            const arrayBuffer = await file.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            // Конверт в моно float32
+            let pcmData = [];
+            const channels = audioBuffer.numberOfChannels;
+            const samples = audioBuffer.length;
+            for (let i = 0; i < samples; i++) {
+                let sum = 0;
+                for (let ch = 0; ch < channels; ch++) {
+                    sum += audioBuffer.getChannelData(ch)[i];
                 }
+                pcmData.push(sum / channels);
             }
+            return new Float32Array(pcmData);
+        }
 
-            function setProgress(percent, text) {
-                if (percent >= 0) {
-                    progressBar.style.display = 'block';
-                    progressFill.style.width = percent + '%';
-                } else {
-                    progressBar.style.display = 'none';
-                }
-                progressText.textContent = text || '';
-            }
+        // Транскрипция через Whisper
+        async function transcribe(pcmData) {
+            status.textContent = 'Распознавание речи... (может занять минуты)';
+            progress.style.display = 'block';
+            progressText.textContent = '0%';
+            
+            // Параметры для русского с английским
+            const params = {
+                language: 'ru', // Автоопределение многоязычное
+                translate: false,
+                n_threads: navigator.hardwareConcurrency || 4
+            };
+            
+            const text = await whisperModule.transcribe(pcmData, params); // Адаптировать API
+            progress.style.display = 'none';
+            return text;
+        }
 
-            function resetUI() {
-                selectedFile = null;
-                fileInput.value = '';
-                fileNameSpan.textContent = 'или перетащите его сюда';
-                transcribeBtn.disabled = true;
-                setStatus('Ожидание файла...');
-                setProgress(-1);
-                resultContainer.style.display = 'none';
-                resultText.textContent = '';
-                modelWarning.style.display = 'block';
-            }
-
-            function enableButtonIfFile() {
-                transcribeBtn.disabled = !selectedFile || isModelLoading || isTranscribing;
-            }
-
-            function handleFile(file) {
-                if (!file) return;
-                const validTypes = ['audio/mp4', 'audio/m4a', 'audio/x-m4a'];
-                if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.m4a')) {
-                    setStatus('❌ Пожалуйста, выберите файл формата M4A', true);
-                    return;
-                }
-                selectedFile = file;
-                fileNameSpan.textContent = file.name;
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
                 transcribeBtn.disabled = false;
-                setStatus(`✅ Файл готов: ${file.name}`);
-                modelWarning.style.display = 'block';
+                transcribeBtn.textContent = `Транскрибировать ${file.name}`;
             }
+        });
 
-            // ---- Загрузка модели ----
-            async function loadModel() {
-                if (pipeline) return pipeline;
-                if (isModelLoading) {
-                    setStatus('⏳ Модель уже загружается...');
-                    return;
-                }
-
-                isModelLoading = true;
-                setStatus('⏳ Загрузка модели распознавания (примерно 150 МБ, один раз)...');
-                setProgress(10, 'Загрузка модели...');
-                modelWarning.style.display = 'none';
-
-                try {
-                    // Используем английскую модель whisper-tiny.en (можно заменить на 'Xenova/whisper-tiny' для многоязычной)
-                    const modelName = 'Xenova/whisper-tiny.en';
-
-                    // Создаём pipeline с отслеживанием прогресса
-                    pipeline = await Transformers.pipeline('automatic-speech-recognition', modelName, {
-                        progress_callback: (progress) => {
-                            if (progress.status === 'downloading') {
-                                const percent = (progress.loaded / progress.total) * 100;
-                                setProgress(percent, `Загрузка модели: ${Math.round(percent)}%`);
-                            } else if (progress.status === 'ready') {
-                                setProgress(100, 'Модель готова!');
-                            }
-                        }
-                    });
-
-                    setStatus('✅ Модель загружена. Можно начинать распознавание.');
-                    setProgress(-1);
-                    isModelLoading = false;
-                    enableButtonIfFile();
-                    return pipeline;
-                } catch (err) {
-                    setStatus('❌ Ошибка загрузки модели: ' + err.message, true);
-                    console.error(err);
-                    isModelLoading = false;
-                    setProgress(-1);
-                    throw err;
-                }
+        transcribeBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+            
+            transcribeBtn.disabled = true;
+            transcribeBtn.textContent = 'Обработка...';
+            
+            try {
+                if (!whisperModule) await initWhisper();
+                const pcmData = await decodeM4AToPCM(file);
+                const text = await transcribe(pcmData);
+                result.textContent = text;
+                status.textContent = 'Готово!';
+            } catch (error) {
+                status.textContent = `Ошибка: ${error.message}`;
+                console.error(error);
+            } finally {
+                transcribeBtn.disabled = false;
+                transcribeBtn.textContent = 'Транскрибировать';
             }
+        });
 
-            // ---- Декодирование и ресемплинг аудио ----
-            async function decodeAndResample(file) {
-                setStatus('🔧 Декодирование аудио...');
-                setProgress(20, 'Чтение файла...');
-
-                const arrayBuffer = await file.arrayBuffer();
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                const audioCtx = new AudioContext();
-
-                setProgress(40, 'Декодирование M4A...');
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-
-                const channels = audioBuffer.numberOfChannels;
-                const sampleRate = audioBuffer.sampleRate;
-                const length = audioBuffer.length;
-                const monoData = new Float32Array(length);
-
-                if (channels === 1) {
-                    monoData.set(audioBuffer.getChannelData(0));
-                } else {
-                    const ch1 = audioBuffer.getChannelData(0);
-                    const ch2 = audioBuffer.getChannelData(1);
-                    for (let i = 0; i < length; i++) {
-                        monoData[i] = (ch1[i] + ch2[i]) / 2;
-                    }
-                }
-
-                const targetRate = 16000;
-                if (sampleRate === targetRate) {
-                    setProgress(70, 'Аудио готово (16000 Гц)');
-                    return monoData;
-                }
-
-                // Ресемплинг
-                const targetLength = Math.round(length * targetRate / sampleRate);
-                const resampled = new Float32Array(targetLength);
-                const step = sampleRate / targetRate;
-                for (let i = 0; i < targetLength; i++) {
-                    const pos = i * step;
-                    const index = Math.floor(pos);
-                    const frac = pos - index;
-                    if (index + 1 >= length) {
-                        resampled[i] = monoData[length - 1];
-                    } else {
-                        resampled[i] = monoData[index] * (1 - frac) + monoData[index + 1] * frac;
-                    }
-                }
-
-                setProgress(70, 'Аудио обработано (16000 Гц моно)');
-                return resampled;
-            }
-
-            // ---- Основная функция распознавания ----
-            async function transcribe() {
-                if (!selectedFile) return;
-
-                isTranscribing = true;
-                transcribeBtn.disabled = true;
-                resultContainer.style.display = 'none';
-                setStatus('🔄 Подготовка...');
-
-                try {
-                    const pipe = pipeline || await loadModel();
-
-                    const audioData = await decodeAndResample(selectedFile);
-
-                    setStatus('🧠 Запуск распознавания (Whisper)...');
-                    setProgress(80, 'Обработка речи...');
-
-                    const output = await pipe(audioData, {
-                        top_k: 0,
-                        do_sample: false,
-                        chunk_length_s: 30,
-                        stride_length_s: 5,
-                        return_timestamps: false,
-                        task: 'transcribe',
-                        language: 'en',
-                    });
-
-                    setProgress(100, 'Распознавание завершено');
-                    const transcription = output.text;
-
-                    resultText.textContent = transcription || '[пусто]';
-                    resultContainer.style.display = 'block';
-                    setStatus('✅ Готово!');
-                    setProgress(-1);
-                } catch (err) {
-                    setStatus('❌ Ошибка распознавания: ' + err.message, true);
-                    console.error(err);
-                    setProgress(-1);
-                } finally {
-                    isTranscribing = false;
-                    enableButtonIfFile();
-                }
-            }
-
-            // ---- Обработчики событий ----
-            dropArea.addEventListener('click', () => fileInput.click());
-
-            dropArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropArea.classList.add('dragover');
-            });
-
-            dropArea.addEventListener('dragleave', () => {
-                dropArea.classList.remove('dragover');
-            });
-
-            dropArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropArea.classList.remove('dragover');
-                const file = e.dataTransfer.files[0];
-                if (file) handleFile(file);
-            });
-
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) handleFile(file);
-            });
-
-            transcribeBtn.addEventListener('click', async () => {
-                if (!selectedFile) return;
-                if (!pipeline && !isModelLoading) {
-                    try {
-                        await loadModel();
-                    } catch (e) {
-                        return;
-                    }
-                }
-                await transcribe();
-            });
-
-            resetBtn.addEventListener('click', resetUI);
-
-            resetUI();
-        })();
+        // Автоинициализация при загрузке
+        window.addEventListener('load', initWhisper);
     </script>
 </body>
 </html>
