@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>PDF Смарт-нарезка + номера страниц</title>
+    <title>PDF Смарт-нарезка — фикс. размер превью</title>
     <!-- PDF.js (основная библиотека и воркер) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- pdf-lib для создания новых PDF -->
@@ -25,7 +25,7 @@
         .split {
             display: flex;
             flex: 1;
-            flex-direction: column; /* по умолчанию вертикально (iPhone) */
+            flex-direction: column;
             overflow: hidden;
             gap: 2px;
             background: #9ca3af;
@@ -201,7 +201,7 @@
         .download-link:active {
             background: #1e3a8a;
         }
-        /* ПРЕДПРОСМОТР — фиксированная ширина 120px и номера страниц */
+        /* ПРЕДПРОСМОТР — ФИКСИРОВАННЫЙ РАЗМЕР КАЖДОЙ МИНИАТЮРЫ */
         .preview-container {
             display: flex;
             flex-wrap: wrap;
@@ -212,17 +212,22 @@
         }
         .page-thumb {
             position: relative;
-            display: inline-block;
+            width: 120px;
+            height: 160px;
+            background: #f9fafb;
             border-radius: 8px;
-            overflow: hidden; /* чтобы номер не вылезал за скругление */
+            overflow: hidden; /* скрываем выходящее за рамки */
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            background: white;
             border: 2px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .page-thumb canvas {
             display: block;
-            width: 120px;       /* фиксированная ширина */
-            height: auto;       /* высота пропорциональна */
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* вписываем без искажений, добавляя поля */
             background: white;
         }
         .page-number {
@@ -238,6 +243,7 @@
             line-height: 1.2;
             backdrop-filter: blur(2px);
             border: 1px solid rgba(255,255,255,0.3);
+            z-index: 2;
         }
         .info-message {
             text-align: center;
@@ -280,7 +286,7 @@
         <div class="pane preview-pane">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span class="total-pages-badge" id="pageCountBadge">⬅️ загрузите PDF</span>
-                <span style="color: #4b5563;">🔍 предпросмотр (120px)</span>
+                <span style="color: #4b5563;">🔍 120x160 пикс.</span>
             </div>
             <div id="previewContainer" class="preview-container">
                 <div class="info-message">Файл не выбран</div>
@@ -446,10 +452,10 @@
                 }
             });
 
-            // --- Последовательный рендеринг страниц (фиксированная ширина 120px) ---
+            // --- Последовательный рендеринг страниц с фиксированным контейнером ---
             async function renderPreviewPages(pdfDoc, numPages) {
                 const currentRender = ++renderId;
-                previewContainer.innerHTML = ''; // очищаем контейнер
+                previewContainer.innerHTML = '';
 
                 for (let pageNum = 1; pageNum <= numPages; pageNum++) {
                     if (currentRender !== renderId) {
@@ -459,8 +465,8 @@
 
                     try {
                         const page = await pdfDoc.getPage(pageNum);
-                        // Фиксированная ширина 120px для превью
-                        const viewport = page.getViewport({ width: 120 });
+                        // Рассчитываем viewport с разумным разрешением (например, 150px ширины для чёткости)
+                        const viewport = page.getViewport({ width: 150 }); 
 
                         const canvas = document.createElement('canvas');
                         canvas.width = viewport.width;
@@ -474,7 +480,7 @@
 
                         await page.render(renderContext).promise;
 
-                        // Оборачиваем canvas в контейнер с номером страницы
+                        // Оборачиваем canvas в контейнер с фиксированными размерами
                         const thumbDiv = document.createElement('div');
                         thumbDiv.className = 'page-thumb';
                         thumbDiv.appendChild(canvas);
@@ -487,7 +493,6 @@
                         previewContainer.appendChild(thumbDiv);
                     } catch (pageError) {
                         console.warn(`Ошибка рендера страницы ${pageNum}:`, pageError);
-                        // Показываем заглушку
                         const errorDiv = document.createElement('div');
                         errorDiv.textContent = `⚠️ стр.${pageNum} не загрузилась`;
                         previewContainer.appendChild(errorDiv);
