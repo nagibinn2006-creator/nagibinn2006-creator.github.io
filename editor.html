@@ -582,6 +582,7 @@
 
             function handlePointerDown(e) {
                 if (activeDocIndex === -1) return;
+                if (currentTool === 'hand') return;
                 if (e.pointerType !== 'pen') return; // только стилус
 
                 const canvas = getCanvasFromTarget(e.target);
@@ -623,7 +624,7 @@
             }
 
             function handlePointerMove(e) {
-                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen') return;
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen' || currentTool === 'hand') return;
 
                 e.preventDefault(); // важно, чтобы прокрутка не мешала
                 const canvas = currentCanvas;
@@ -643,7 +644,7 @@
             }
 
             function handlePointerUp(e) {
-                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen') return;
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen' || currentTool === 'hand') return;
 
                 e.preventDefault();
                 isDrawing = false;
