@@ -3,273 +3,361 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>PDF Смарт-нарезка — работает!</title>
-    <!-- PDF.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <!-- pdf-lib -->
+    <title>PDF Смарт-нарезка (без предпросмотра)</title>
+    <!-- pdf-lib для создания новых PDF -->
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
-        * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
-        body { margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; background: #e5e7eb; }
-        .split {
-            display: flex; flex: 1; flex-direction: column; overflow: hidden; gap: 2px; background: #9ca3af;
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
-        .pane { padding: 16px 12px; overflow-y: auto; -webkit-overflow-scrolling: touch; background: white; }
-        .controls-pane { flex: 1.2; background: #f9fafb; border-bottom: 2px solid #d1d5db; }
-        .preview-pane { flex: 2; background: #f3f4f6; }
-        @media (min-width: 600px) {
-            .split { flex-direction: row; }
-            .controls-pane { flex: 1; border-bottom: none; border-right: 2px solid #d1d5db; }
-            .preview-pane { flex: 2; }
+        body {
+            margin: 0;
+            padding: 16px;
+            min-height: 100vh;
+            background: #e5e7eb;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
         }
-
-        /* Элементы управления */
-        h3 { margin-top: 0; margin-bottom: 16px; font-size: 1.3rem; font-weight: 600; color: #1f2937; }
-        .file-input-wrapper { margin-bottom: 20px; }
-        #fileInput { width: 100%; padding: 12px; background: #e5e7eb; border-radius: 12px; border: 1px solid #d1d5db; font-size: 16px; }
-
-        #rangesContainer { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; max-height: 400px; overflow-y: auto; padding-right: 4px; }
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background: white;
+            border-radius: 32px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            padding: 24px 20px;
+        }
+        h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #1f2937;
+            text-align: center;
+        }
+        .file-input-wrapper {
+            margin-bottom: 24px;
+        }
+        #fileInput {
+            width: 100%;
+            padding: 14px;
+            background: #f3f4f6;
+            border-radius: 30px;
+            border: 1px solid #d1d5db;
+            font-size: 16px;
+        }
+        /* Контейнер для строк диапазонов */
+        #rangesContainer {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 24px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        /* Одна строка */
         .range-row {
-            display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #ffffff; padding: 12px 10px;
-            border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            background: #f9fafb;
+            padding: 12px 10px;
+            border-radius: 20px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .range-row input {
-            flex: 2 1 180px; min-width: 140px; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 30px;
-            font-size: 16px; background: white; transition: 0.2s;
+            flex: 2 1 200px;
+            min-width: 150px;
+            padding: 12px 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 40px;
+            font-size: 16px;
+            background: white;
+            transition: 0.2s;
         }
-        .range-row input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
-        .range-row .name-input { flex: 1 1 140px; }
+        .range-row input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+        .range-row .name-input {
+            flex: 1 1 150px;
+        }
         .remove-row {
-            flex: 0 0 44px; height: 44px; border-radius: 30px; border: none; background: #fee2e2; color: #b91c1c;
-            font-size: 20px; font-weight: bold; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.2s; margin-left: auto;
+            flex: 0 0 44px;
+            height: 44px;
+            border-radius: 40px;
+            border: none;
+            background: #fee2e2;
+            color: #b91c1c;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-left: auto;
         }
-        .remove-row:active { background: #fecaca; transform: scale(0.95); }
-
-        .action-buttons { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 10px; }
+        .remove-row:active {
+            background: #fecaca;
+            transform: scale(0.95);
+        }
+        /* Кнопки действий */
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
         button {
-            padding: 14px 20px; border: none; border-radius: 40px; font-size: 17px; font-weight: 500;
-            background: #e5e7eb; color: #1f2937; flex: 1 1 auto; cursor: pointer; transition: 0.15s;
-            touch-action: manipulation; border: 1px solid transparent;
+            padding: 14px 22px;
+            border: none;
+            border-radius: 50px;
+            font-size: 17px;
+            font-weight: 500;
+            background: #e5e7eb;
+            color: #1f2937;
+            flex: 1 1 auto;
+            cursor: pointer;
+            transition: 0.15s;
+            touch-action: manipulation;
+            border: 1px solid transparent;
         }
-        button:active { background: #d1d5db; transform: scale(0.97); }
-        #sliceBtn { background: #3b82f6; color: white; font-weight: 600; box-shadow: 0 4px 6px rgba(59,130,246,0.3); }
-        #sliceBtn:active { background: #2563eb; }
-        #addRangeBtn { background: #ffffff; border: 1px solid #3b82f6; color: #3b82f6; }
-
-        #downloadLinks { margin-top: 20px; padding: 16px 12px; background: #e0f2fe; border-radius: 24px; border: 1px solid #7dd3fc; }
+        button:active {
+            background: #d1d5db;
+            transform: scale(0.97);
+        }
+        #sliceBtn {
+            background: #3b82f6;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 8px rgba(59,130,246,0.3);
+        }
+        #sliceBtn:active {
+            background: #2563eb;
+        }
+        #addRangeBtn {
+            background: #ffffff;
+            border: 1px solid #3b82f6;
+            color: #3b82f6;
+        }
+        /* Блок ссылок для скачивания */
+        #downloadLinks {
+            margin-top: 20px;
+            padding: 16px 14px;
+            background: #e0f2fe;
+            border-radius: 24px;
+            border: 1px solid #7dd3fc;
+        }
         .download-link {
-            display: inline-block; margin: 8px 8px 0 0; padding: 12px 18px; background: #3b82f6; color: white;
-            border-radius: 40px; text-decoration: none; font-weight: 500; font-size: 16px;
+            display: inline-block;
+            margin: 8px 8px 0 0;
+            padding: 12px 18px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 40px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 16px;
+            transition: 0.1s;
         }
-        .download-link:active { background: #1e3a8a; }
-
-        /* ПРЕДПРОСМОТР — максимально просто */
-        .preview-container {
-            display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: flex-start; padding: 10px 5px;
+        .download-link:active {
+            background: #1e3a8a;
         }
-        .page-thumb {
-            position: relative; display: inline-block; background: #f0f0f0; border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15); border: 2px solid white; overflow: hidden;
+        .info-message {
+            color: #6b7280;
+            text-align: center;
+            padding: 20px;
         }
-        .page-thumb canvas {
-            display: block; width: 120px; height: auto; background: white; /* фон на всякий случай */
+        .total-pages-badge {
+            background: #dbeafe;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 15px;
+            display: inline-block;
+            margin-bottom: 16px;
         }
-        .page-number {
-            position: absolute; top: 4px; left: 4px; background: rgba(0, 0, 0, 0.7); color: white;
-            font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 12px;
-            backdrop-filter: blur(2px); border: 1px solid rgba(255,255,255,0.3); z-index: 2;
-        }
-        .info-message { text-align: center; color: #6b7280; padding: 30px 10px; font-style: italic; width: 100%; }
-        .total-pages-badge { background: #dbeafe; padding: 6px 14px; border-radius: 30px; font-size: 14px; display: inline-block; margin-bottom: 12px; }
     </style>
 </head>
 <body>
-    <div class="split">
-        <div class="pane controls-pane">
-            <h3>📄 Настройка нарезки</h3>
-            <div class="file-input-wrapper">
-                <input type="file" id="fileInput" accept="application/pdf">
-            </div>
-            <div id="rangesContainer"></div>
-            <div class="action-buttons">
-                <button id="addRangeBtn">➕ Добавить</button>
-                <button id="sliceBtn">✂️ Нарезать</button>
-            </div>
-            <div id="downloadLinks"></div>
+    <div class="container">
+        <h2>✂️ Смарт-нарезка PDF</h2>
+
+        <div class="file-input-wrapper">
+            <input type="file" id="fileInput" accept="application/pdf">
         </div>
 
-        <div class="pane preview-pane">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span class="total-pages-badge" id="pageCountBadge">⬅️ загрузите PDF</span>
-                <span style="color: #4b5563;">🔍 ширина 120px</span>
-            </div>
-            <div id="previewContainer" class="preview-container">
-                <div class="info-message">Файл не выбран</div>
-            </div>
+        <div id="pageInfo" class="total-pages-badge">⬅️ загрузите PDF</div>
+
+        <div id="rangesContainer">
+            <!-- Строки будут добавляться сюда -->
+        </div>
+
+        <div class="action-buttons">
+            <button id="addRangeBtn">➕ Добавить диапазон</button>
+            <button id="sliceBtn">✂️ Нарезать</button>
+        </div>
+
+        <div id="downloadLinks">
+            <!-- Ссылки на готовые файлы -->
         </div>
     </div>
 
     <script>
         (function() {
+            // --- Инициализация ---
             const { PDFDocument } = PDFLib;
-            const pdfjsLib = window.pdfjsLib;
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
+            // Элементы DOM
             const fileInput = document.getElementById('fileInput');
             const rangesContainer = document.getElementById('rangesContainer');
             const addRangeBtn = document.getElementById('addRangeBtn');
             const sliceBtn = document.getElementById('sliceBtn');
             const downloadLinksDiv = document.getElementById('downloadLinks');
-            const previewContainer = document.getElementById('previewContainer');
-            const pageCountBadge = document.getElementById('pageCountBadge');
+            const pageInfo = document.getElementById('pageInfo');
 
-            let currentPdfJsDoc = null;
-            let currentPdfLibDoc = null;
-            let sourceBuffer = null;
+            // Состояние
+            let loadedPdfDoc = null;       // pdf-lib документ
             let totalPages = 0;
-            let renderId = 0;
             let createdUrls = [];
 
+            // --- Вспомогательные функции ---
             function revokeAllUrls() {
                 createdUrls.forEach(url => URL.revokeObjectURL(url));
                 createdUrls = [];
             }
 
-            function clearPreviewAndLinks() {
-                previewContainer.innerHTML = '';
+            function clearDownloadLinks() {
                 downloadLinksDiv.innerHTML = '';
                 revokeAllUrls();
             }
 
-            function setPreviewMessage(msg) {
-                previewContainer.innerHTML = `<div class="info-message">${msg}</div>`;
+            function updatePageInfo() {
+                if (totalPages > 0) {
+                    pageInfo.textContent = `📄 Всего страниц: ${totalPages}`;
+                } else {
+                    pageInfo.textContent = `⬅️ загрузите PDF`;
+                }
             }
 
-            function updatePageBadge() {
-                pageCountBadge.textContent = totalPages > 0 ? `📄 всего стр: ${totalPages}` : `⬅️ загрузите PDF`;
-            }
-
+            // --- Парсинг строки диапазонов (пример: "5-15, 1, 3-7") ---
             function parseRangeString(rangeStr, maxPage) {
-                if (!rangeStr.trim()) throw new Error('Пустая строка диапазона');
-                const parts = rangeStr.split(',').map(s => s.trim()).filter(s => s);
+                if (!rangeStr || rangeStr.trim() === '') {
+                    throw new Error('Пустая строка диапазона');
+                }
+                const parts = rangeStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
                 const pages = [];
+
                 for (let part of parts) {
                     if (part.includes('-')) {
-                        const [s, e] = part.split('-').map(x => parseInt(x.trim(), 10));
-                        if (isNaN(s) || isNaN(e) || s < 1 || e < 1 || s > e) throw new Error(`Неверный диапазон: ${part}`);
-                        if (s > maxPage || e > maxPage) throw new Error(`Выход за пределы (макс. ${maxPage})`);
-                        for (let i = s; i <= e; i++) pages.push(i);
+                        const dashParts = part.split('-').map(s => s.trim());
+                        if (dashParts.length !== 2) {
+                            throw new Error(`Неверный диапазон: "${part}"`);
+                        }
+                        const start = parseInt(dashParts[0], 10);
+                        const end = parseInt(dashParts[1], 10);
+                        if (isNaN(start) || isNaN(end) || start < 1 || end < 1 || start > end) {
+                            throw new Error(`Некорректные числа в диапазоне: "${part}"`);
+                        }
+                        if (start > maxPage || end > maxPage) {
+                            throw new Error(`Диапазон ${part} выходит за пределы (макс. ${maxPage})`);
+                        }
+                        for (let i = start; i <= end; i++) {
+                            pages.push(i);
+                        }
                     } else {
-                        const p = parseInt(part, 10);
-                        if (isNaN(p) || p < 1 || p > maxPage) throw new Error(`Неверная страница: ${part}`);
-                        pages.push(p);
+                        const pageNum = parseInt(part, 10);
+                        if (isNaN(pageNum) || pageNum < 1 || pageNum > maxPage) {
+                            throw new Error(`Неверный номер страницы: "${part}" (макс. ${maxPage})`);
+                        }
+                        pages.push(pageNum);
                     }
                 }
-                if (!pages.length) throw new Error('Нет страниц');
+                if (pages.length === 0) {
+                    throw new Error('Не удалось извлечь ни одной страницы');
+                }
                 return pages;
             }
 
+            // --- Добавление новой строки диапазона ---
             function addRangeRow(rangeValue = '', nameValue = '') {
                 const row = document.createElement('div');
                 row.className = 'range-row';
-                row.innerHTML = `
-                    <input type="text" class="range-input" placeholder="напр. 5-15, 1, 3-7" value="${rangeValue.replace(/"/g, '&quot;')}">
-                    <input type="text" class="name-input" placeholder="имя файла (опц.)" value="${nameValue.replace(/"/g, '&quot;')}">
-                    <button class="remove-row" aria-label="Удалить">✕</button>
-                `;
-                row.querySelector('.remove-row').addEventListener('click', () => row.remove());
+
+                const rangeInput = document.createElement('input');
+                rangeInput.type = 'text';
+                rangeInput.className = 'range-input';
+                rangeInput.placeholder = 'напр. 5-15, 1, 3-7';
+                rangeInput.value = rangeValue;
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'name-input';
+                nameInput.placeholder = 'имя файла (необяз.)';
+                nameInput.value = nameValue;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-row';
+                removeBtn.innerHTML = '✕';
+                removeBtn.setAttribute('aria-label', 'Удалить');
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    row.remove();
+                });
+
+                row.appendChild(rangeInput);
+                row.appendChild(nameInput);
+                row.appendChild(removeBtn);
                 rangesContainer.appendChild(row);
             }
+
+            // Добавляем одну строку по умолчанию
             addRangeRow('1-3', 'часть_1');
 
+            // --- Загрузка PDF ---
             fileInput.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
 
-                clearPreviewAndLinks();
-                setPreviewMessage('⏳ Загрузка...');
-                currentPdfJsDoc = null;
-                currentPdfLibDoc = null;
-                sourceBuffer = null;
+                clearDownloadLinks();
+                loadedPdfDoc = null;
                 totalPages = 0;
-                updatePageBadge();
+                updatePageInfo();
 
                 try {
                     const arrayBuffer = await file.arrayBuffer();
-                    sourceBuffer = arrayBuffer.slice(0);
-
-                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                    currentPdfJsDoc = await loadingTask.promise;
-                    totalPages = currentPdfJsDoc.numPages;
-                    updatePageBadge();
-
-                    currentPdfLibDoc = await PDFDocument.load(arrayBuffer);
-
-                    renderPreviewPages(currentPdfJsDoc, totalPages);
-
+                    // Загружаем документ через pdf-lib
+                    loadedPdfDoc = await PDFDocument.load(arrayBuffer);
+                    totalPages = loadedPdfDoc.getPageCount();
+                    updatePageInfo();
                 } catch (error) {
                     console.error('Ошибка загрузки PDF:', error);
-                    setPreviewMessage('❌ Ошибка загрузки');
-                    pageCountBadge.textContent = '⚠️ ошибка';
+                    pageInfo.textContent = '❌ Ошибка загрузки файла';
                 }
             });
 
-            // --------------------------------------------------------------
-            // УПРОЩЁННЫЙ РЕНДЕРИНГ: ширина canvas = 120px, высота автоматически
-            // --------------------------------------------------------------
-            async function renderPreviewPages(pdfDoc, numPages) {
-                const currentRender = ++renderId;
-                previewContainer.innerHTML = '';
-
-                for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-                    if (currentRender !== renderId) return;
-
-                    try {
-                        const page = await pdfDoc.getPage(pageNum);
-                        // Задаём ширину ровно 120px — canvas будет такого же размера
-                        const viewport = page.getViewport();
-
-                        const canvas = document.createElement('canvas');
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-
-                        const context = canvas.getContext('2d');
-                        // Для отладки зальём фон светло-серым, чтобы увидеть canvas даже без контента
-                        context.fillStyle = '#f0f0f0';
-                        context.fillRect(0, 0, canvas.width, canvas.height);
-
-                        await page.render({ canvasContext: context, viewport }).promise;
-
-                        const thumbDiv = document.createElement('div');
-                        thumbDiv.className = 'page-thumb';
-                        thumbDiv.appendChild(canvas);
-
-                        const numberSpan = document.createElement('span');
-                        numberSpan.className = 'page-number';
-                        numberSpan.textContent = pageNum;
-                        thumbDiv.appendChild(numberSpan);
-
-                        previewContainer.appendChild(thumbDiv);
-                    }
-                }
-            }
-
+            // --- Нарезка PDF ---
             sliceBtn.addEventListener('click', async () => {
-                if (!currentPdfLibDoc || totalPages === 0) {
-                    alert('Сначала загрузите PDF');
-                    return;
-                }
-                const rows = document.querySelectorAll('.range-row');
-                if (!rows.length) {
-                    alert('Добавьте хотя бы один диапазон');
+                if (!loadedPdfDoc || totalPages === 0) {
+                    alert('Сначала загрузите PDF-файл');
                     return;
                 }
 
+                const rows = document.querySelectorAll('.range-row');
+                if (rows.length === 0) {
+                    alert('Добавьте хотя бы один диапазон для нарезки');
+                    return;
+                }
+
+                // Блокируем кнопку на время обработки
                 sliceBtn.disabled = true;
                 sliceBtn.textContent = '⏳ Нарезка...';
-                downloadLinksDiv.innerHTML = '';
-                revokeAllUrls();
+                clearDownloadLinks();
 
                 const jobs = [];
                 for (let row of rows) {
@@ -279,60 +367,76 @@
                     const baseName = nameInput.value.trim() || 'output';
 
                     if (!rangeStr) {
-                        alert('Пустая строка диапазона');
+                        alert('Обнаружена пустая строка диапазона. Заполните или удалите её.');
                         sliceBtn.disabled = false;
                         sliceBtn.textContent = '✂️ Нарезать';
                         return;
                     }
 
                     try {
-                        const pages = parseRangeString(rangeStr, totalPages);
-                        jobs.push({ indices: pages.map(p => p-1), name: baseName });
-                    } catch (e) {
-                        alert(`Ошибка: ${e.message}`);
+                        const pageNumbers = parseRangeString(rangeStr, totalPages);
+                        // Преобразуем в 0-индекс
+                        const pageIndices = pageNumbers.map(p => p - 1);
+                        jobs.push({
+                            indices: pageIndices,
+                            name: baseName
+                        });
+                    } catch (parseErr) {
+                        alert(`Ошибка в строке "${rangeStr}": ${parseErr.message}`);
                         sliceBtn.disabled = false;
                         sliceBtn.textContent = '✂️ Нарезать';
                         return;
                     }
                 }
 
+                // Создаём новые PDF
                 try {
-                    for (let job of jobs) {
+                    for (let i = 0; i < jobs.length; i++) {
+                        const job = jobs[i];
                         const newPdf = await PDFDocument.create();
-                        const copied = await newPdf.copyPages(currentPdfLibDoc, job.indices);
-                        copied.forEach(p => newPdf.addPage(p));
-                        const bytes = await newPdf.save();
-                        const blob = new Blob([bytes], { type: 'application/pdf' });
+                        const copiedPages = await newPdf.copyPages(loadedPdfDoc, job.indices);
+                        copiedPages.forEach(page => newPdf.addPage(page));
+
+                        const pdfBytes = await newPdf.save();
+                        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
                         const url = URL.createObjectURL(blob);
                         createdUrls.push(url);
 
-                        let fname = job.name;
-                        if (!fname.toLowerCase().endsWith('.pdf')) fname += '.pdf';
+                        let finalFileName = job.name;
+                        if (!finalFileName.toLowerCase().endsWith('.pdf')) {
+                            finalFileName += '.pdf';
+                        }
+
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = fname;
-                        link.textContent = `📎 ${fname}`;
+                        link.download = finalFileName;
+                        link.textContent = `📎 ${finalFileName}`;
                         link.className = 'download-link';
-                        link.target = '_blank';
+                        link.target = '_blank'; // для мобильных устройств
                         downloadLinksDiv.appendChild(link);
                     }
-                    if (jobs.length) {
+
+                    // Добавляем заголовок, если есть результаты
+                    if (jobs.length > 0) {
                         const title = document.createElement('p');
-                        title.textContent = '✅ Готово:';
+                        title.textContent = '✅ Готовые файлы:';
                         title.style.margin = '0 0 10px 0';
                         title.style.fontWeight = '600';
                         downloadLinksDiv.prepend(title);
                     }
                 } catch (error) {
-                    console.error(error);
-                    alert('Ошибка при нарезке');
+                    console.error('Ошибка при нарезке:', error);
+                    alert('Произошла ошибка при создании PDF. Подробности в консоли.');
                 } finally {
                     sliceBtn.disabled = false;
                     sliceBtn.textContent = '✂️ Нарезать';
                 }
             });
 
-            addRangeBtn.addEventListener('click', () => addRangeRow('', ''));
+            // --- Добавление новой строки по кнопке ---
+            addRangeBtn.addEventListener('click', () => {
+                addRangeRow('', '');
+            });
         })();
     </script>
 </body>
