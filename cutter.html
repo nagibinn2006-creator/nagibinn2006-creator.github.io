@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>PDF Смарт-нарезка + предпросмотр с номерами</title>
+    <title>PDF Смарт-нарезка + пролистывание страниц</title>
     <!-- PDF.js (для предпросмотра) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- pdf-lib (для нарезки) -->
@@ -202,7 +202,7 @@
             background: #1e3a8a;
         }
 
-        /* Предпросмотр с PDF.js */
+        /* Предпросмотр с вертикальным пролистыванием всех страниц */
         .preview-container {
             width: 100%;
             height: 100%;
@@ -226,59 +226,41 @@
             font-size: 14px;
             display: inline-block;
         }
-        .preview-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: white;
-            padding: 4px 8px;
-            border-radius: 40px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .preview-controls button {
-            background: transparent;
-            border: none;
-            font-size: 24px;
-            padding: 0 8px;
-            cursor: pointer;
-            color: #3b82f6;
-            flex: 0 0 auto;
-            box-shadow: none;
-        }
-        .preview-controls button:active {
-            transform: scale(1.2);
-            background: transparent;
-        }
-        .preview-controls span {
-            font-size: 16px;
-            font-weight: 500;
-            color: #1f2937;
-            min-width: 60px;
-            text-align: center;
-        }
-        .preview-controls button:disabled {
-            opacity: 0.3;
-            pointer-events: none;
-        }
-        #pdfCanvas {
-            display: block;
-            margin: 0 auto;
-            max-width: 100%;
-            height: auto;
-            object-fit: contain;
-            background: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border-radius: 8px;
-        }
-        .canvas-wrapper {
+        .pages-container {
             flex: 1;
-            overflow: auto;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 16px;
+            overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            padding: 16px;
             background: #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+        }
+        .page-wrapper {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 16px 16px 8px 16px;
+            width: 100%;
+            max-width: 600px;
+        }
+        .page-wrapper canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            margin: 0 auto;
+            background: white;
+        }
+        .page-label {
+            text-align: center;
+            margin-top: 8px;
+            font-weight: 600;
+            color: #1f2937;
+            background: #f3f4f6;
+            padding: 4px;
+            border-radius: 20px;
+            font-size: 14px;
         }
         .placeholder-message {
             display: flex;
@@ -319,17 +301,10 @@
             <div class="preview-container">
                 <div class="preview-header">
                     <span class="total-pages-badge" id="pageCountBadge">⬅️ загрузите PDF</span>
-                    <div class="preview-controls">
-                        <button id="prevPage" disabled>◀</button>
-                        <span id="currentPage">-</span>
-                        <button id="nextPage" disabled>▶</button>
-                    </div>
+                    <span style="color:#4b5563; font-size:13px;">↓ пролистывание</span>
                 </div>
-                <div class="canvas-wrapper" id="canvasWrapper">
-                    <canvas id="pdfCanvas"></canvas>
-                </div>
-                <div id="fallbackMessage" class="placeholder-message" style="display: none;">
-                    Не удалось загрузить предпросмотр
+                <div class="pages-container" id="pagesContainer">
+                    <div class="placeholder-message">Файл не выбран</div>
                 </div>
             </div>
         </div>
@@ -349,21 +324,14 @@
             const sliceBtn = document.getElementById('sliceBtn');
             const downloadLinksDiv = document.getElementById('downloadLinks');
             const pageCountBadge = document.getElementById('pageCountBadge');
-            const pdfCanvas = document.getElementById('pdfCanvas');
-            const canvasWrapper = document.getElementById('canvasWrapper');
-            const prevPageBtn = document.getElementById('prevPage');
-            const nextPageBtn = document.getElementById('nextPage');
-            const currentPageSpan = document.getElementById('currentPage');
-            const fallbackMessage = document.getElementById('fallbackMessage');
+            const pagesContainer = document.getElementById('pagesContainer');
 
             // --- Состояние ---
             let loadedPdfDoc = null;          // pdf-lib документ (для нарезки)
             let previewPdfDoc = null;          // pdf.js документ (для предпросмотра)
             let totalPages = 0;
-            let currentPage = 1;
             let createdUrls = [];
-            let isRendering = false;
-            let pendingRender = null;
+            let renderCancelled = false;
 
             // --- Вспомогательные функции ---
             function revokeAllUrls() {
@@ -378,14 +346,8 @@
             function updatePageInfo() {
                 if (totalPages > 0) {
                     pageCountBadge.textContent = `📄 Всего страниц: ${totalPages}`;
-                    currentPageSpan.textContent = `${currentPage} / ${totalPages}`;
-                    prevPageBtn.disabled = (currentPage <= 1);
-                    nextPageBtn.disabled = (currentPage >= totalPages);
                 } else {
                     pageCountBadge.textContent = `⬅️ загрузите PDF`;
-                    currentPageSpan.textContent = '-';
-                    prevPageBtn.disabled = true;
-                    nextPageBtn.disabled = true;
                 }
             }
 
@@ -393,52 +355,69 @@
             function clearPreview() {
                 previewPdfDoc = null;
                 totalPages = 0;
-                currentPage = 1;
                 updatePageInfo();
-                const ctx = pdfCanvas.getContext('2d');
-                ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
-                fallbackMessage.style.display = 'none';
-                pdfCanvas.style.display = 'block';
+                pagesContainer.innerHTML = '<div class="placeholder-message">Файл не выбран</div>';
             }
 
-            // Рендер страницы с заданным номером (1-based)
-            async function renderPage(pageNum) {
-                if (!previewPdfDoc) return;
-                if (isRendering) {
-                    pendingRender = pageNum;
-                    return;
-                }
-                isRendering = true;
-                try {
-                    const page = await previewPdfDoc.getPage(pageNum);
-                    // Определяем масштаб, чтобы ширина canvas была не более 100% контейнера
-                    const containerWidth = canvasWrapper.clientWidth - 32; // отступы
-                    const viewport = page.getViewport({ scale: 1.0 });
-                    const scale = Math.min(1.5, containerWidth / viewport.width);
-                    const scaledViewport = page.getViewport({ scale });
+            // Рендер всех страниц последовательно с вертикальным скроллом
+            async function renderAllPages(pdfDoc) {
+                renderCancelled = true; // отменяем предыдущий рендер
+                await new Promise(resolve => setTimeout(resolve, 10)); // даём время на отмену
+                renderCancelled = false;
 
-                    // Устанавливаем размер canvas
-                    pdfCanvas.width = scaledViewport.width;
-                    pdfCanvas.height = scaledViewport.height;
+                const currentRenderId = Symbol('render');
+                const renderId = currentRenderId;
 
-                    const ctx = pdfCanvas.getContext('2d');
-                    const renderContext = {
-                        canvasContext: ctx,
-                        viewport: scaledViewport
-                    };
-                    await page.render(renderContext).promise;
-                    currentPage = pageNum;
-                    updatePageInfo();
-                } catch (err) {
-                    console.error('Ошибка рендера страницы:', err);
-                    fallbackMessage.style.display = 'flex';
-                    pdfCanvas.style.display = 'none';
-                } finally {
-                    isRendering = false;
-                    if (pendingRender !== null) {
-                        const next = pendingRender;
-                        pendingRender = null;
-                        renderPage(next);
+                pagesContainer.innerHTML = ''; // очищаем
+
+                for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                    if (renderCancelled || renderId !== currentRenderId) {
+                        console.log('Рендер отменён');
+                        return;
+                    }
+
+                    try {
+                        const page = await pdfDoc.getPage(pageNum);
+                        // Определяем ширину контейнера (максимум 600px)
+                        const containerWidth = Math.min(pagesContainer.clientWidth - 40, 600);
+                        const viewport = page.getViewport({ scale: 1.0 });
+                        const scale = containerWidth / viewport.width;
+                        const scaledViewport = page.getViewport({ scale });
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = scaledViewport.width;
+                        canvas.height = scaledViewport.height;
+                        canvas.style.width = '100%';
+                        canvas.style.height = 'auto';
+
+                        const ctx = canvas.getContext('2d');
+                        const renderContext = {
+                            canvasContext: ctx,
+                            viewport: scaledViewport,
+                        };
+
+                        await page.render(renderContext).promise;
+
+                        // Создаём обёртку для страницы
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'page-wrapper';
+                        wrapper.appendChild(canvas);
+
+                        const label = document.createElement('div');
+                        label.className = 'page-label';
+                        label.textContent = `Страница ${pageNum} из ${totalPages}`;
+                        wrapper.appendChild(label);
+
+                        pagesContainer.appendChild(wrapper);
+                    } catch (err) {
+                        console.error(`Ошибка рендера страницы ${pageNum}:`, err);
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'page-wrapper';
+                        errorDiv.style.padding = '20px';
+                        errorDiv.style.textAlign = 'center';
+                        errorDiv.style.color = '#b91c1c';
+                        errorDiv.textContent = `⚠️ Страница ${pageNum} не загрузилась`;
+                        pagesContainer.appendChild(errorDiv);
                     }
                 }
             }
@@ -533,28 +512,15 @@
                     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                     previewPdfDoc = await loadingTask.promise;
                     totalPages = previewPdfDoc.numPages;
-                    currentPage = 1;
                     updatePageInfo();
 
-                    // Рендерим первую страницу
-                    renderPage(1);
+                    // Рендерим все страницы
+                    renderAllPages(previewPdfDoc);
 
                 } catch (error) {
                     console.error('Ошибка загрузки PDF:', error);
                     pageCountBadge.textContent = '❌ Ошибка загрузки';
-                }
-            });
-
-            // --- Навигация по страницам ---
-            prevPageBtn.addEventListener('click', () => {
-                if (currentPage > 1) {
-                    renderPage(currentPage - 1);
-                }
-            });
-
-            nextPageBtn.addEventListener('click', () => {
-                if (currentPage < totalPages) {
-                    renderPage(currentPage + 1);
+                    pagesContainer.innerHTML = '<div class="placeholder-message">Ошибка загрузки файла</div>';
                 }
             });
 
@@ -657,8 +623,9 @@
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
-                    if (previewPdfDoc && currentPage) {
-                        renderPage(currentPage);
+                    if (previewPdfDoc && totalPages > 0) {
+                        // Перерендерить все страницы с новым масштабом
+                        renderAllPages(previewPdfDoc);
                     }
                 }, 200);
             });
