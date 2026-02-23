@@ -465,34 +465,35 @@
             openPdfBtn.addEventListener('click', () => fileInput.click());
 
             fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const typedarray = new Uint8Array(ev.target.result);
-                    pdfjsLib.getDocument({ data: typedarray }).promise.then(pdfDoc => {
-                        const numPages = pdfDoc.numPages;
-                        const pages = [];
-                        let completed = 0;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const typedarray = new Uint8Array(ev.target.result);
+        pdfjsLib.getDocument({ data: typedarray }).promise.then(pdfDoc => {
+            const numPages = pdfDoc.numPages;
+            const pages = new Array(numPages); // массив фиксированной длины
+            let completed = 0;
 
-                        for (let i = 1; i <= numPages; i++) {
-                            renderPageToDataURL(pdfDoc, i, (dataURL, width, height) => {
-                                pages.push({ dataURL, width, height });
-                                completed++;
-                                if (completed === numPages) {
-                                    const doc = new PDFDocument(file, pages);
-                                    documents.push(doc);
-                                    renderTabs();
-                                    switchToDocument(documents.length-1);
-                                }
-                            });
-                        }
-                    }).catch(err => alert('Ошибка загрузки PDF: ' + err.message));
-                };
-                reader.readAsArrayBuffer(file);
-                fileInput.value = '';
-            });
+            for (let i = 1; i <= numPages; i++) {
+                const pageIndex = i - 1; // индекс для массива
+                renderPageToDataURL(pdfDoc, i, (dataURL, width, height) => {
+                    pages[pageIndex] = { dataURL, width, height };
+                    completed++;
+                    if (completed === numPages) {
+                        const doc = new PDFDocument(file, pages);
+                        documents.push(doc);
+                        renderTabs();
+                        switchToDocument(documents.length - 1);
+                    }
+                });
+            }
+        }).catch(err => alert('Ошибка загрузки PDF: ' + err.message));
+    };
+    reader.readAsArrayBuffer(file);
+    fileInput.value = '';
+});
 
             function renderPageToDataURL(pdfDoc, pageNum, callback) {
                 pdfDoc.getPage(pageNum).then(page => {
