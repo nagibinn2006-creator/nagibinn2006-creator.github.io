@@ -57,14 +57,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            /* touch-action будет управляться динамически */
         }
         #resizer { width: 8px; background: #aaa; cursor: col-resize; transition: background 0.2s; }
         #resizer:hover, #resizer:active { background: #1976D2; }
         #commentsPanel { background: white; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid #ccc; }
         .comments-range { display: flex; padding: 10px; gap: 5px; background: #f5f5f5; border-bottom: 1px solid #ddd; align-items: center; flex-wrap: wrap; }
         .comments-range input[type="text"] { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; min-width: 150px; }
-        .comments-range button { background: #1976D2; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+        .comments-range button { background: #1976D2; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px; }
         #commentsContent {
             flex: 1;
             width: 100%;
@@ -85,6 +84,11 @@
         .file-list-item button { background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
         .hidden { display: none; }
         #fileInput { display: none; }
+        /* Дополнительные стили для кнопок озвучивания */
+        .comments-range button.speak-btn { background: #2e7d32; }
+        .comments-range button.pause-btn { background: #ff8f00; }
+        .comments-range button.resume-btn { background: #1565c0; }
+        .comments-range button.restart-btn { background: #c2185b; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
@@ -116,6 +120,11 @@
             <div class="comments-range">
                 <input type="text" id="commentRange" placeholder="Страницы, например: 1-3,5,7-9" value="1">
                 <button id="addImageBtn" title="Вставить изображение">🖼️</button>
+                <!-- Кнопки для озвучивания комментариев -->
+                <button id="speakBtn" class="speak-btn" title="Озвучить комментарии">🔊</button>
+                <button id="pauseBtn" class="pause-btn" title="Пауза">⏸️</button>
+                <button id="resumeBtn" class="resume-btn" title="Продолжить">▶️</button>
+                <button id="restartBtn" class="restart-btn" title="Сначала">🔄</button>
             </div>
             <div id="commentsContent" contenteditable="true"></div>
         </div>
@@ -176,6 +185,18 @@
             const colorPalette = document.getElementById('colorPalette');
             const sizeSlider = document.getElementById('sizeSlider');
             const sizeValue = document.getElementById('sizeValue');
+
+            // ---------- Элементы для озвучивания ----------
+            const speakBtn = document.getElementById('speakBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            const restartBtn = document.getElementById('restartBtn');
+
+            // Проверка поддержки speechSynthesis
+            const speechSupported = 'speechSynthesis' in window;
+            if (!speechSupported) {
+                [speakBtn, pauseBtn, resumeBtn, restartBtn].forEach(btn => btn.style.display = 'none');
+            }
 
             // ---------- Генерация палитры (30 цветов) ----------
             function generateColorPalette() {
@@ -325,6 +346,8 @@
                 if (documents.length === 0) return;
                 if (activeDocIndex === index) {
                     saveCurrentComment();
+                    // Останавливаем озвучивание при закрытии документа
+                    if (speechSupported) window.speechSynthesis.cancel();
                 }
                 documents.splice(index, 1);
                 if (documents.length === 0) {
@@ -342,6 +365,8 @@
                 if (index === activeDocIndex || index < 0 || index >= documents.length) return;
                 if (activeDocIndex !== -1) {
                     saveCurrentComment();
+                    // Останавливаем озвучивание при переключении документа
+                    if (speechSupported) window.speechSynthesis.cancel();
                 }
                 activeDocIndex = index;
                 renderTabs();
@@ -459,41 +484,44 @@
                 } else {
                     commentRange.value = page.toString();
                 }
+
+                // При смене страницы останавливаем текущее озвучивание, чтобы не читать старый текст
+                if (speechSupported) window.speechSynthesis.cancel();
             }
 
             // ---------- Открытие PDF ----------
             openPdfBtn.addEventListener('click', () => fileInput.click());
 
             fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+                const file = e.target.files[0];
+                if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-        const typedarray = new Uint8Array(ev.target.result);
-        pdfjsLib.getDocument({ data: typedarray }).promise.then(pdfDoc => {
-            const numPages = pdfDoc.numPages;
-            const pages = new Array(numPages); // массив фиксированной длины
-            let completed = 0;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const typedarray = new Uint8Array(ev.target.result);
+                    pdfjsLib.getDocument({ data: typedarray }).promise.then(pdfDoc => {
+                        const numPages = pdfDoc.numPages;
+                        const pages = new Array(numPages); // массив фиксированной длины
+                        let completed = 0;
 
-            for (let i = 1; i <= numPages; i++) {
-                const pageIndex = i - 1; // индекс для массива
-                renderPageToDataURL(pdfDoc, i, (dataURL, width, height) => {
-                    pages[pageIndex] = { dataURL, width, height };
-                    completed++;
-                    if (completed === numPages) {
-                        const doc = new PDFDocument(file, pages);
-                        documents.push(doc);
-                        renderTabs();
-                        switchToDocument(documents.length - 1);
-                    }
-                });
-            }
-        }).catch(err => alert('Ошибка загрузки PDF: ' + err.message));
-    };
-    reader.readAsArrayBuffer(file);
-    fileInput.value = '';
-});
+                        for (let i = 1; i <= numPages; i++) {
+                            const pageIndex = i - 1; // индекс для массива
+                            renderPageToDataURL(pdfDoc, i, (dataURL, width, height) => {
+                                pages[pageIndex] = { dataURL, width, height };
+                                completed++;
+                                if (completed === numPages) {
+                                    const doc = new PDFDocument(file, pages);
+                                    documents.push(doc);
+                                    renderTabs();
+                                    switchToDocument(documents.length - 1);
+                                }
+                            });
+                        }
+                    }).catch(err => alert('Ошибка загрузки PDF: ' + err.message));
+                };
+                reader.readAsArrayBuffer(file);
+                fileInput.value = '';
+            });
 
             function renderPageToDataURL(pdfDoc, pageNum, callback) {
                 pdfDoc.getPage(pageNum).then(page => {
@@ -518,7 +546,6 @@
 
             commentsContent.addEventListener('input', onCommentChange);
             commentRange.addEventListener('change', onCommentChange);
-            // Добавляем обработчик blur, чтобы сохранять при клике вне поля диапазона
             commentRange.addEventListener('blur', onCommentChange);
 
             // Вставка изображения
@@ -547,6 +574,8 @@
                         } else {
                             commentRange.value = page.toString();
                         }
+                        // Останавливаем озвучивание при прокрутке (комментарии изменились)
+                        if (speechSupported) window.speechSynthesis.cancel();
                     }
                 }
             });
@@ -589,9 +618,8 @@
                 const canvas = getCanvasFromTarget(e.target);
                 if (!canvas) return;
 
-                // Захватываем указатель, чтобы получать события даже за пределами canvas
                 canvas.setPointerCapture(e.pointerId);
-                e.preventDefault(); // предотвращаем прокрутку во время рисования
+                e.preventDefault();
 
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
@@ -614,7 +642,7 @@
                 ctx.moveTo(x, y);
                 if (currentTool === 'eraser') {
                     ctx.globalCompositeOperation = 'destination-out';
-                    ctx.strokeStyle = '#000000'; // любой цвет
+                    ctx.strokeStyle = '#000000';
                 } else {
                     ctx.globalCompositeOperation = 'source-over';
                     ctx.strokeStyle = brushColor;
@@ -627,7 +655,7 @@
             function handlePointerMove(e) {
                 if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen' || currentTool === 'hand') return;
 
-                e.preventDefault(); // важно, чтобы прокрутка не мешала
+                e.preventDefault();
                 const canvas = currentCanvas;
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
@@ -657,7 +685,7 @@
                 }
 
                 const ctx = currentCanvas.getContext('2d');
-                ctx.globalCompositeOperation = 'source-over'; // сброс
+                ctx.globalCompositeOperation = 'source-over';
 
                 currentStroke = null;
                 currentCanvas = null;
@@ -737,6 +765,44 @@
                     brushSizePicker.classList.remove('show');
                 }
             });
+
+            // ---------- Функции озвучивания ----------
+            function speakComments() {
+                if (!speechSupported || activeDocIndex === -1) return;
+                // Останавливаем текущее
+                window.speechSynthesis.cancel();
+                const text = commentsContent.innerText; // получаем чистый текст
+                if (!text.trim()) {
+                    alert('Нет текста для озвучивания');
+                    return;
+                }
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ru-RU'; // можно изменить при необходимости
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                window.speechSynthesis.speak(utterance);
+            }
+
+            function pauseSpeech() {
+                if (speechSupported) window.speechSynthesis.pause();
+            }
+
+            function resumeSpeech() {
+                if (speechSupported) window.speechSynthesis.resume();
+            }
+
+            function restartSpeech() {
+                if (!speechSupported || activeDocIndex === -1) return;
+                // Отменяем и запускаем заново
+                window.speechSynthesis.cancel();
+                speakComments(); // запускает с тем же текстом
+            }
+
+            // Привязываем обработчики
+            speakBtn.addEventListener('click', speakComments);
+            pauseBtn.addEventListener('click', pauseSpeech);
+            resumeBtn.addEventListener('click', resumeSpeech);
+            restartBtn.addEventListener('click', restartSpeech);
 
             // ---------- Настройки ----------
             function updateStorageInfo() {
