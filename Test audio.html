@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpeechSynthesis Voice настройки</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        .range-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .range-group input[type="range"] {
+            flex: 1;
+        }
+        .range-group span {
+            min-width: 40px;
+            text-align: right;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            flex: 1 1 auto;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.stop {
+            background: #f44336;
+        }
+        button.stop:hover {
+            background: #da190b;
+        }
+        button.pause {
+            background: #ff9800;
+        }
+        button.pause:hover {
+            background: #e68a00;
+        }
+        .info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e7f3ff;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Речевой синтез</h1>
+
+        <!-- Выбор голоса -->
+        <div class="control-group">
+            <label for="voiceSelect">Голос:</label>
+            <select id="voiceSelect"></select>
+        </div>
+
+        <!-- Выбор языка -->
+        <div class="control-group">
+            <label for="langSelect">Язык (можно переопределить):</label>
+            <select id="langSelect">
+                <option value="">По умолчанию (из голоса)</option>
+            </select>
+        </div>
+
+        <!-- Текст -->
+        <div class="control-group">
+            <label for="textInput">Текст для озвучивания:</label>
+            <textarea id="textInput">Привет, мир! Это тест голосового синтеза.</textarea>
+        </div>
+
+        <!-- Ползунки -->
+        <div class="control-group">
+            <label>Высота тона (pitch): <span id="pitchValue">1.0</span></label>
+            <div class="range-group">
+                <input type="range" id="pitch" min="0" max="2" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Скорость (rate): <span id="rateValue">1.0</span></label>
+            <div class="range-group">
+                <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Громкость (volume): <span id="volumeValue">1.0</span></label>
+            <div class="range-group">
+                <input type="range" id="volume" min="0" max="1" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <!-- Кнопки управления -->
+        <div class="button-group">
+            <button id="speakBtn">🔊 Озвучить</button>
+            <button id="stopBtn" class="stop">⏹️ Стоп</button>
+            <button id="pauseBtn" class="pause">⏸️ Пауза</button>
+            <button id="resumeBtn">▶️ Продолжить</button>
+        </div>
+
+        <!-- Информация о состоянии -->
+        <div class="info" id="info">
+            Выберите голос и нажмите "Озвучить". Доступно голосов: <span id="voiceCount">0</span>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // Проверка поддержки API
+            if (!window.speechSynthesis) {
+                alert('К сожалению, ваш браузер не поддерживает Web Speech API');
+                return;
+            }
+
+            // Элементы управления
+            const synth = window.speechSynthesis;
+            const voiceSelect = document.getElementById('voiceSelect');
+            const langSelect = document.getElementById('langSelect');
+            const textInput = document.getElementById('textInput');
+            const pitchInput = document.getElementById('pitch');
+            const rateInput = document.getElementById('rate');
+            const volumeInput = document.getElementById('volume');
+            const pitchValue = document.getElementById('pitchValue');
+            const rateValue = document.getElementById('rateValue');
+            const volumeValue = document.getElementById('volumeValue');
+            const speakBtn = document.getElementById('speakBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            const voiceCountSpan = document.getElementById('voiceCount');
+            const infoDiv = document.getElementById('info');
+
+            let voices = []; // все доступные голоса
+
+            // Функция обновления списка голосов и языков
+            function loadVoices() {
+                voices = synth.getVoices();
+                if (!voices.length) return;
+
+                // Сортировка голосов: сначала локальные, затем по имени
+                voices.sort((a, b) => {
+                    if (a.localService === b.localService) {
+                        return a.name.localeCompare(b.name);
+                    }
+                    return a.localService ? -1 : 1;
+                });
+
+                // Заполнение select голосов
+                voiceSelect.innerHTML = '';
+                voices.forEach((voice, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = `${voice.name} (${voice.lang}) ${voice.localService ? '🔹 локальный' : '☁️ сетевой'} ${voice.default ? '⭐ по умолчанию' : ''}`;
+                    if (voice.default) option.selected = true;
+                    voiceSelect.appendChild(option);
+                });
+
+                // Заполнение select языков уникальными значениями lang
+                const uniqueLangs = [...new Set(voices.map(v => v.lang))].sort();
+                langSelect.innerHTML = '<option value="">По умолчанию (из голоса)</option>';
+                uniqueLangs.forEach(lang => {
+                    const option = document.createElement('option');
+                    option.value = lang;
+                    option.textContent = lang;
+                    langSelect.appendChild(option);
+                });
+
+                // Обновление счётчика голосов
+                voiceCountSpan.textContent = voices.length;
+                infoDiv.textContent = 'Голоса загружены. Выберите настройки и нажмите "Озвучить".';
+            }
+
+            // Загружаем голоса (событие может сработать несколько раз)
+            loadVoices(); // для некоторых браузеров, где голоса уже доступны
+            if (synth.onvoiceschanged !== undefined) {
+                synth.onvoiceschanged = loadVoices;
+            }
+
+            // Отображение значений ползунков
+            function updateRangeDisplay() {
+                pitchValue.textContent = pitchInput.value;
+                rateValue.textContent = rateInput.value;
+                volumeValue.textContent = volumeInput.value;
+            }
+            pitchInput.addEventListener('input', updateRangeDisplay);
+            rateInput.addEventListener('input', updateRangeDisplay);
+            volumeInput.addEventListener('input', updateRangeDisplay);
+            updateRangeDisplay();
+
+            // Озвучивание текста
+            function speak() {
+                // Отмена текущей речи перед новой (чтобы не накладывалось)
+                synth.cancel();
+
+                const text = textInput.value.trim();
+                if (!text) {
+                    alert('Введите текст для озвучивания');
+                    return;
+                }
+
+                // Создаём utterance
+                const utterance = new SpeechSynthesisUtterance(text);
+
+                // Устанавливаем голос, если выбран
+                const selectedVoiceIndex = voiceSelect.value;
+                if (selectedVoiceIndex && voices[selectedVoiceIndex]) {
+                    utterance.voice = voices[selectedVoiceIndex];
+                }
+
+                // Устанавливаем язык (если выбран конкретный)
+                if (langSelect.value) {
+                    utterance.lang = langSelect.value;
+                }
+
+                // Устанавливаем параметры из ползунков
+                utterance.pitch = parseFloat(pitchInput.value);
+                utterance.rate = parseFloat(rateInput.value);
+                utterance.volume = parseFloat(volumeInput.value);
+
+                // Обработчики событий (для отладки)
+                utterance.onstart = () => {
+                    infoDiv.textContent = '▶️ Речь началась...';
+                };
+                utterance.onend = () => {
+                    infoDiv.textContent = '✅ Речь завершена.';
+                };
+                utterance.onerror = (event) => {
+                    infoDiv.textContent = `❌ Ошибка: ${event.error}`;
+                };
+                utterance.onpause = () => {
+                    infoDiv.textContent = '⏸️ Речь приостановлена.';
+                };
+                utterance.onresume = () => {
+                    infoDiv.textContent = '▶️ Речь возобновлена.';
+                };
+
+                // Запуск
+                synth.speak(utterance);
+            }
+
+            // Обработчики кнопок
+            speakBtn.addEventListener('click', speak);
+
+            stopBtn.addEventListener('click', () => {
+                synth.cancel();
+                infoDiv.textContent = '⏹️ Речь остановлена.';
+            });
+
+            pauseBtn.addEventListener('click', () => {
+                synth.pause();
+                // Информация обновится в onpause
+            });
+
+            resumeBtn.addEventListener('click', () => {
+                synth.resume();
+                // Информация обновится в onresume
+            });
+
+            // Небольшая подсказка: если голоса не загрузились через onvoiceschanged,
+            // пробуем загрузить их вручную с задержкой (для старых браузеров)
+            setTimeout(() => {
+                if (voices.length === 0) {
+                    loadVoices();
+                }
+            }, 200);
+        })();
+    </script>
+</body>
+</html>
