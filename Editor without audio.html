@@ -1,1 +1,812 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>PDF Reader с рукописными заметками и комментариями</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f0f2f5; overflow: hidden; }
+        /* Верхняя панель */
+        #topBar { background: #1976D2; color: white; padding: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        #tabContainer { display: flex; flex: 1; gap: 5px; overflow-x: auto; white-space: nowrap; }
+        .tab { background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+        .tab.active { background: rgba(255,255,255,0.4); font-weight: bold; }
+        .tab .close { margin-left: 5px; font-size: 16px; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(0,0,0,0.3); }
+        .tab .close:active { background: rgba(0,0,0,0.5); }
+        #openPdfBtn { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        #settingsBtn { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: auto; }
+        .tool-icon { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 22px; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; position: relative; }
+        .tool-icon.active { background: rgba(255,255,255,0.4); }
+        .tool-icon:active { background: rgba(255,255,255,0.6); }
+        #brushSizePicker {
+            position: fixed;
+            background: white;
+            color: black;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            min-width: 220px;
+            display: none;
+        }
+        #brushSizePicker.show { display: block; }
+        .color-palette { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; max-width: 220px; }
+        .color-item { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #ccc; cursor: pointer; }
+        .color-item.selected { border: 3px solid #000; }
+        .slider-container { display: flex; flex-direction: column; gap: 5px; }
+        /* Основная область */
+        #mainContainer { flex: 1; display: flex; overflow: hidden; }
+        #pdfPanel { background: #e9ecef; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; padding: 10px; transition: width 0.05s; }
+        #pdfContainer { width: 100%; max-width: 100%; padding-left: 5px; }
+        .pdf-page-wrapper {
+            position: relative;
+            margin-bottom: 15px;
+            width: 100%;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .pdf-page-wrapper canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .draw-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* touch-action будет управляться динамически */
+        }
+        #resizer { width: 8px; background: #aaa; cursor: col-resize; transition: background 0.2s; }
+        #resizer:hover, #resizer:active { background: #1976D2; }
+        #commentsPanel { background: white; overflow: hidden; display: flex; flex-direction: column; border-left: 1px solid #ccc; }
+        .comments-range { display: flex; padding: 10px; gap: 5px; background: #f5f5f5; border-bottom: 1px solid #ddd; align-items: center; flex-wrap: wrap; }
+        .comments-range input[type="text"] { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; min-width: 150px; }
+        .comments-range button { background: #1976D2; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+        #commentsContent {
+            flex: 1;
+            width: 100%;
+            padding: 15px;
+            overflow-y: auto;
+            outline: none;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        #commentsContent img { max-width: 100%; height: auto; }
+        #pageIndicator { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: white; padding: 12px 24px; border-radius: 40px; font-weight: bold; z-index: 100; pointer-events: none; }
+        /* Модальное окно */
+        #settingsModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 2000; }
+        .modal-content { background: white; border-radius: 10px; padding: 20px; max-width: 500px; width: 90%; max-height: 80%; overflow: auto; }
+        .modal-content h3 { margin-bottom: 15px; }
+        .storage-info { margin-bottom: 15px; font-weight: bold; }
+        .file-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+        .file-list-item button { background: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        .hidden { display: none; }
+        #fileInput { display: none; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+</head>
+<body>
+    <!-- Верхняя панель -->
+    <div id="topBar">
+        <div id="tabContainer"></div>
+        <button id="openPdfBtn" title="Открыть PDF">➕</button>
+        <button class="tool-icon" id="brushBtn" title="Кисть (стилус)">🖌️</button>
+        <button class="tool-icon" id="eraserBtn" title="Ластик (стилус)">🧽</button>
+        <button class="tool-icon" id="handBtn" title="Ладонь (листать)">✋</button>
+        <div id="brushSizePicker">
+            <div class="color-palette" id="colorPalette"></div>
+            <div class="slider-container">
+                <label>Размер: <span id="sizeValue">4</span></label>
+                <input type="range" id="sizeSlider" min="1" max="20" value="4">
+            </div>
+        </div>
+        <button id="settingsBtn" title="Настройки">⚙️</button>
+    </div>
 
+    <!-- Основная область -->
+    <div id="mainContainer">
+        <div id="pdfPanel" style="width: 70%;">
+            <div id="pdfContainer"></div>
+        </div>
+        <div id="resizer"></div>
+        <div id="commentsPanel" style="width: 30%;">
+            <div class="comments-range">
+                <input type="text" id="commentRange" placeholder="Страницы, например: 1-3,5,7-9" value="1">
+                <button id="addImageBtn" title="Вставить изображение">🖼️</button>
+            </div>
+            <div id="commentsContent" contenteditable="true"></div>
+        </div>
+    </div>
+
+    <div id="pageIndicator">Стр. 1</div>
+
+    <!-- Модальное окно настроек -->
+    <div id="settingsModal">
+        <div class="modal-content">
+            <h3>Настройки хранилища</h3>
+            <div class="storage-info" id="storageSize">Загружено...</div>
+            <h4>Файлы с данными:</h4>
+            <div id="fileList"></div>
+            <button id="closeModalBtn" style="margin-top:15px; padding:8px 16px;">Закрыть</button>
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" />
+
+    <script>
+        (function() {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+            // ---------- Состояние ----------
+            const documents = [];
+            let activeDocIndex = -1;
+            let currentTool = 'hand'; // 'brush', 'eraser', 'hand'
+            let brushColor = '#FF0000';
+            let brushSize = 4;
+
+            // Рисование
+            let isDrawing = false;
+            let currentStroke = null;
+            let currentCanvas = null;
+
+            // Элементы
+            const tabContainer = document.getElementById('tabContainer');
+            const pdfContainer = document.getElementById('pdfContainer');
+            const pageIndicator = document.getElementById('pageIndicator');
+            const commentsContent = document.getElementById('commentsContent');
+            const commentRange = document.getElementById('commentRange');
+            const addImageBtn = document.getElementById('addImageBtn');
+            const resizer = document.getElementById('resizer');
+            const pdfPanel = document.getElementById('pdfPanel');
+            const commentsPanel = document.getElementById('commentsPanel');
+            const openPdfBtn = document.getElementById('openPdfBtn');
+            const settingsBtn = document.getElementById('settingsBtn');
+            const fileInput = document.getElementById('fileInput');
+            const settingsModal = document.getElementById('settingsModal');
+            const storageSize = document.getElementById('storageSize');
+            const fileList = document.getElementById('fileList');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const brushBtn = document.getElementById('brushBtn');
+            const eraserBtn = document.getElementById('eraserBtn');
+            const handBtn = document.getElementById('handBtn');
+            const brushSizePicker = document.getElementById('brushSizePicker');
+            const colorPalette = document.getElementById('colorPalette');
+            const sizeSlider = document.getElementById('sizeSlider');
+            const sizeValue = document.getElementById('sizeValue');
+
+            // ---------- Генерация палитры (30 цветов) ----------
+            function generateColorPalette() {
+                const colors = [
+                    '#FF0000','#00FF00','#0000FF','#FFFF00','#FF00FF','#00FFFF','#000000','#FFFFFF',
+                    '#FF4500','#FFD700','#ADFF2F','#00CED1','#1E90FF','#EE82EE','#A52A2A','#808080',
+                    '#F08080','#90EE90','#ADD8E6','#FFB6C1','#FFA07A','#20B2AA','#87CEFA','#778899',
+                    '#B0C4DE','#FFFFE0','#FAFAD2','#D3D3D3','#DAA520','#CD5C5C'
+                ];
+                colors.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'color-item';
+                    div.style.backgroundColor = c;
+                    div.setAttribute('data-color', c);
+                    div.addEventListener('click', () => {
+                        brushColor = c;
+                        document.querySelectorAll('.color-item').forEach(i => i.classList.remove('selected'));
+                        div.classList.add('selected');
+                    });
+                    colorPalette.appendChild(div);
+                });
+                // Выделяем красный по умолчанию
+                colorPalette.querySelector('[data-color="#FF0000"]').classList.add('selected');
+            }
+            generateColorPalette();
+
+            // ---------- Управление touch-action для canvas (блокировка прокрутки при рисовании) ----------
+            function updateCanvasTouchAction() {
+                const canvases = document.querySelectorAll('.draw-canvas');
+                canvases.forEach(canvas => {
+                    if (currentTool === 'brush' || currentTool === 'eraser') {
+                        canvas.style.touchAction = 'none';
+                    } else {
+                        canvas.style.touchAction = '';
+                    }
+                });
+            }
+
+            // ---------- Парсинг строки диапазона ----------
+            function parseRangeString(str) {
+                if (!str.trim()) return [];
+                const parts = str.split(',');
+                const pagesSet = new Set();
+                parts.forEach(part => {
+                    part = part.trim();
+                    if (part.includes('-')) {
+                        const [start, end] = part.split('-').map(Number);
+                        if (!isNaN(start) && !isNaN(end) && start <= end) {
+                            for (let i = start; i <= end; i++) pagesSet.add(i);
+                        }
+                    } else {
+                        const p = Number(part);
+                        if (!isNaN(p)) pagesSet.add(p);
+                    }
+                });
+                return Array.from(pagesSet).sort((a,b) => a - b);
+            }
+
+            // ---------- Класс документа ----------
+            class PDFDocument {
+                constructor(file, pages) {
+                    this.id = file.name + '_' + file.lastModified + '_' + file.size;
+                    this.name = file.name;
+                    this.pages = pages;           // массив { dataURL, width, height }
+                    // Комментарии: массив объектов { pages: [1,2,5], html: "<p>..." }
+                    this.comments = [];
+                    this.drawings = {};            // { pageNum: strokes[] }
+                }
+
+                // Получить комментарий для страницы (склеиваем все, что подходят)
+                getCommentHTMLForPage(page) {
+                    const relevant = this.comments.filter(c => c.pages.includes(page));
+                    if (relevant.length === 0) return '';
+                    return relevant.map(c => c.html).join('<hr>');
+                }
+
+                // Добавить/обновить комментарий (простая стратегия: заменяем все комментарии для этих страниц на новый)
+                setComment(pagesArray, html) {
+                    // Удаляем старые комментарии, которые имеют пересечение с указанными страницами
+                    this.comments = this.comments.filter(c => !c.pages.some(p => pagesArray.includes(p)));
+                    if (html.trim() !== '') {
+                        this.comments.push({ pages: pagesArray, html: html });
+                    }
+                    this.saveToLocalStorage();
+                }
+
+                getDrawings(page) {
+                    return this.drawings[page] || [];
+                }
+
+                addStroke(page, stroke) {
+                    if (!this.drawings[page]) this.drawings[page] = [];
+                    this.drawings[page].push(stroke);
+                    this.saveToLocalStorage();
+                }
+
+                saveToLocalStorage() {
+                    const key = 'pdf_data_' + this.id;
+                    const data = {
+                        comments: this.comments,
+                        drawings: this.drawings
+                    };
+                    localStorage.setItem(key, JSON.stringify(data));
+                }
+
+                loadFromLocalStorage() {
+                    const key = 'pdf_data_' + this.id;
+                    const saved = localStorage.getItem(key);
+                    if (saved) {
+                        try {
+                            const data = JSON.parse(saved);
+                            this.comments = data.comments || [];
+                            this.drawings = data.drawings || {};
+                        } catch (e) {
+                            this.comments = [];
+                            this.drawings = {};
+                        }
+                    }
+                }
+            }
+
+            // ---------- Работа с вкладками ----------
+            function renderTabs() {
+                tabContainer.innerHTML = '';
+                documents.forEach((doc, i) => {
+                    const tab = document.createElement('span');
+                    tab.className = 'tab' + (i === activeDocIndex ? ' active' : '');
+                    tab.textContent = doc.name;
+                    tab.dataset.index = i;
+                    tab.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('close')) return;
+                        switchToDocument(parseInt(e.currentTarget.dataset.index));
+                    });
+                    const closeBtn = document.createElement('span');
+                    closeBtn.className = 'close';
+                    closeBtn.innerHTML = '✕';
+                    closeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeDocument(i);
+                    });
+                    tab.appendChild(closeBtn);
+                    tabContainer.appendChild(tab);
+                });
+            }
+
+            function closeDocument(index) {
+                if (documents.length === 0) return;
+                if (activeDocIndex === index) {
+                    saveCurrentComment();
+                }
+                documents.splice(index, 1);
+                if (documents.length === 0) {
+                    activeDocIndex = -1;
+                    pdfContainer.innerHTML = '';
+                    pageIndicator.style.display = 'none';
+                } else {
+                    if (index <= activeDocIndex) activeDocIndex = Math.max(0, activeDocIndex-1);
+                    switchToDocument(activeDocIndex);
+                }
+                renderTabs();
+            }
+
+            function switchToDocument(index) {
+                if (index === activeDocIndex || index < 0 || index >= documents.length) return;
+                if (activeDocIndex !== -1) {
+                    saveCurrentComment();
+                }
+                activeDocIndex = index;
+                renderTabs();
+                loadDocumentToView(documents[activeDocIndex]);
+            }
+
+            function saveCurrentComment() {
+                if (activeDocIndex === -1) return;
+                const doc = documents[activeDocIndex];
+                const pagesArray = parseRangeString(commentRange.value);
+                if (pagesArray.length === 0) return;
+                const html = commentsContent.innerHTML;
+                doc.setComment(pagesArray, html);
+            }
+
+            function getVisiblePage() {
+                const wrappers = document.querySelectorAll('.pdf-page-wrapper');
+                if (wrappers.length === 0) return -1;
+                const containerRect = pdfPanel.getBoundingClientRect();
+                for (let i = 0; i < wrappers.length; i++) {
+                    const rect = wrappers[i].getBoundingClientRect();
+                    if (rect.top < containerRect.bottom && rect.bottom > containerRect.top) {
+                        return i+1;
+                    }
+                }
+                return 1;
+            }
+
+            // Отрисовка всех штрихов на canvas
+            function redrawDrawings(canvas, strokes) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                strokes.forEach(stroke => {
+                    ctx.beginPath();
+                    if (stroke.eraser) {
+                        ctx.globalCompositeOperation = 'destination-out';
+                        ctx.strokeStyle = '#000000'; // цвет не важен, композиция решает
+                    } else {
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.strokeStyle = stroke.color;
+                    }
+                    ctx.lineWidth = stroke.size;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    if (stroke.points.length < 2) return;
+                    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                    for (let i = 1; i < stroke.points.length; i++) {
+                        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+                    }
+                    ctx.stroke();
+                });
+                // Возвращаем композицию
+                ctx.globalCompositeOperation = 'source-over';
+            }
+
+            function loadDocumentToView(doc) {
+                pdfContainer.innerHTML = '';
+                doc.pages.forEach((pageData, idx) => {
+                    const pageNum = idx+1;
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'pdf-page-wrapper';
+
+                    const pdfCanvas = document.createElement('canvas');
+                    pdfCanvas.width = pageData.width;
+                    pdfCanvas.height = pageData.height;
+                    pdfCanvas.style.width = '100%';
+                    pdfCanvas.style.height = 'auto';
+                    wrapper.appendChild(pdfCanvas);
+
+                    const drawCanvas = document.createElement('canvas');
+                    drawCanvas.width = pageData.width;
+                    drawCanvas.height = pageData.height;
+                    drawCanvas.className = 'draw-canvas';
+                    drawCanvas.style.width = '100%';
+                    drawCanvas.style.height = 'auto';
+                    drawCanvas.setAttribute('data-page', pageNum);
+                    wrapper.appendChild(drawCanvas);
+
+                    pdfContainer.appendChild(wrapper);
+
+                    // Загружаем PDF слой
+                    const img = new Image();
+                    img.onload = () => {
+                        pdfCanvas.getContext('2d').drawImage(img, 0, 0);
+                    };
+                    img.src = pageData.dataURL;
+
+                    // Загружаем рисунки
+                    const strokes = doc.getDrawings(pageNum);
+                    redrawDrawings(drawCanvas, strokes);
+                });
+
+                doc.loadFromLocalStorage();
+                // Показываем комментарий для первой страницы
+                updateCommentUIForPage(1);
+                pageIndicator.style.display = 'block';
+                pageIndicator.textContent = 'Стр. 1';
+
+                // Обновляем touch-action для новых canvas
+                updateCanvasTouchAction();
+            }
+
+            function updateCommentUIForPage(page) {
+                if (activeDocIndex === -1) return;
+                const doc = documents[activeDocIndex];
+                const html = doc.getCommentHTMLForPage(page);
+                commentsContent.innerHTML = html;
+                // Попытаемся вывести диапазон из первого подходящего комментария (если есть)
+                const relevant = doc.comments.filter(c => c.pages.includes(page));
+                if (relevant.length > 0) {
+                    // Преобразуем массив страниц в строку диапазона (упрощённо: объединяем все)
+                    const pages = relevant.flatMap(c => c.pages);
+                    const unique = [...new Set(pages)].sort((a,b)=>a-b);
+                    commentRange.value = unique.map(p => p).join(', '); // упрощённо
+                } else {
+                    commentRange.value = page.toString();
+                }
+            }
+
+            // ---------- Открытие PDF ----------
+            openPdfBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const typedarray = new Uint8Array(ev.target.result);
+        pdfjsLib.getDocument({ data: typedarray }).promise.then(pdfDoc => {
+            const numPages = pdfDoc.numPages;
+            const pages = new Array(numPages); // массив фиксированной длины
+            let completed = 0;
+
+            for (let i = 1; i <= numPages; i++) {
+                const pageIndex = i - 1; // индекс для массива
+                renderPageToDataURL(pdfDoc, i, (dataURL, width, height) => {
+                    pages[pageIndex] = { dataURL, width, height };
+                    completed++;
+                    if (completed === numPages) {
+                        const doc = new PDFDocument(file, pages);
+                        documents.push(doc);
+                        renderTabs();
+                        switchToDocument(documents.length - 1);
+                    }
+                });
+            }
+        }).catch(err => alert('Ошибка загрузки PDF: ' + err.message));
+    };
+    reader.readAsArrayBuffer(file);
+    fileInput.value = '';
+});
+
+            function renderPageToDataURL(pdfDoc, pageNum, callback) {
+                pdfDoc.getPage(pageNum).then(page => {
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise.then(() => {
+                        callback(canvas.toDataURL('image/png'), viewport.width, viewport.height);
+                    });
+                });
+            }
+
+            // ---------- Комментарии ----------
+            function onCommentChange() {
+                // Сохраняем при изменении поля диапазона или содержимого
+                if (activeDocIndex === -1) return;
+                const page = getVisiblePage();
+                if (page === -1) return;
+                saveCurrentComment();
+            }
+
+            commentsContent.addEventListener('input', onCommentChange);
+            commentRange.addEventListener('change', onCommentChange);
+            // Добавляем обработчик blur, чтобы сохранять при клике вне поля диапазона
+            commentRange.addEventListener('blur', onCommentChange);
+
+            // Вставка изображения
+            addImageBtn.addEventListener('click', () => {
+                const url = prompt('Введите URL изображения:');
+                if (url) {
+                    document.execCommand('insertHTML', false, `<img src="${url}" alt="image" style="max-width:100%">`);
+                    onCommentChange();
+                }
+            });
+
+            // ---------- Обновление индикатора страницы при прокрутке ----------
+            pdfPanel.addEventListener('scroll', () => {
+                const page = getVisiblePage();
+                if (page !== -1) {
+                    pageIndicator.textContent = `Стр. ${page}`;
+                    if (activeDocIndex !== -1) {
+                        const doc = documents[activeDocIndex];
+                        const html = doc.getCommentHTMLForPage(page);
+                        commentsContent.innerHTML = html;
+                        const relevant = doc.comments.filter(c => c.pages.includes(page));
+                        if (relevant.length > 0) {
+                            const pages = relevant.flatMap(c => c.pages);
+                            const unique = [...new Set(pages)].sort((a,b)=>a-b);
+                            commentRange.value = unique.map(p => p).join(', ');
+                        } else {
+                            commentRange.value = page.toString();
+                        }
+                    }
+                }
+            });
+
+            // ---------- Разделитель ----------
+            let isResizing = false;
+            resizer.addEventListener('mousedown', () => { isResizing = true; });
+            resizer.addEventListener('touchstart', () => { isResizing = true; });
+            window.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const containerRect = mainContainer.getBoundingClientRect();
+                let newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+                if (newWidth < 20) newWidth = 20;
+                if (newWidth > 80) newWidth = 80;
+                pdfPanel.style.width = newWidth + '%';
+                commentsPanel.style.width = (100 - newWidth) + '%';
+            });
+            window.addEventListener('touchmove', (e) => {
+                if (!isResizing) return;
+                const containerRect = mainContainer.getBoundingClientRect();
+                let newWidth = ((e.touches[0].clientX - containerRect.left) / containerRect.width) * 100;
+                if (newWidth < 20) newWidth = 20;
+                if (newWidth > 80) newWidth = 80;
+                pdfPanel.style.width = newWidth + '%';
+                commentsPanel.style.width = (100 - newWidth) + '%';
+            });
+            window.addEventListener('mouseup', () => { isResizing = false; });
+            window.addEventListener('touchend', () => { isResizing = false; });
+
+            // ---------- Рисование (только стилус) с захватом указателя ----------
+            function getCanvasFromTarget(target) {
+                return target.classList.contains('draw-canvas') ? target : null;
+            }
+
+            function handlePointerDown(e) {
+                if (activeDocIndex === -1) return;
+                if (currentTool === 'hand') return;
+                if (e.pointerType !== 'pen') return; // только стилус
+
+                const canvas = getCanvasFromTarget(e.target);
+                if (!canvas) return;
+
+                // Захватываем указатель, чтобы получать события даже за пределами canvas
+                canvas.setPointerCapture(e.pointerId);
+                e.preventDefault(); // предотвращаем прокрутку во время рисования
+
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+
+                currentCanvas = canvas;
+                isDrawing = true;
+                const stroke = {
+                    points: [{ x, y }],
+                    color: brushColor,
+                    size: brushSize,
+                    eraser: currentTool === 'eraser'
+                };
+                currentStroke = stroke;
+
+                const ctx = canvas.getContext('2d');
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                if (currentTool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.strokeStyle = '#000000'; // любой цвет
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = brushColor;
+                }
+                ctx.lineWidth = brushSize;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            }
+
+            function handlePointerMove(e) {
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen' || currentTool === 'hand') return;
+
+                e.preventDefault(); // важно, чтобы прокрутка не мешала
+                const canvas = currentCanvas;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+
+                currentStroke.points.push({ x, y });
+
+                const ctx = canvas.getContext('2d');
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }
+
+            function handlePointerUp(e) {
+                if (!isDrawing || !currentCanvas || !currentStroke || e.pointerType !== 'pen' || currentTool === 'hand') return;
+
+                e.preventDefault();
+                isDrawing = false;
+
+                if (currentStroke.points.length > 1) {
+                    const page = parseInt(currentCanvas.dataset.page);
+                    const doc = documents[activeDocIndex];
+                    doc.addStroke(page, currentStroke);
+                }
+
+                const ctx = currentCanvas.getContext('2d');
+                ctx.globalCompositeOperation = 'source-over'; // сброс
+
+                currentStroke = null;
+                currentCanvas = null;
+            }
+
+            document.addEventListener('pointerdown', handlePointerDown);
+            document.addEventListener('pointermove', handlePointerMove);
+            document.addEventListener('pointerup', handlePointerUp);
+            document.addEventListener('pointercancel', handlePointerUp);
+
+            // ---------- Инструменты ----------
+            brushBtn.addEventListener('click', () => {
+                currentTool = 'brush';
+                brushBtn.classList.add('active');
+                eraserBtn.classList.remove('active');
+                handBtn.classList.remove('active');
+                brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
+            });
+            eraserBtn.addEventListener('click', () => {
+                currentTool = 'eraser';
+                eraserBtn.classList.add('active');
+                brushBtn.classList.remove('active');
+                handBtn.classList.remove('active');
+                brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
+            });
+            handBtn.addEventListener('click', () => {
+                currentTool = 'hand';
+                handBtn.classList.add('active');
+                brushBtn.classList.remove('active');
+                eraserBtn.classList.remove('active');
+                brushSizePicker.classList.remove('show');
+                updateCanvasTouchAction();
+            });
+
+            // Показ всплывающего окна
+            function showPicker(btn) {
+                const rect = btn.getBoundingClientRect();
+                let top = rect.bottom + window.scrollY;
+                let left = rect.left + window.scrollX;
+                const pickerWidth = brushSizePicker.offsetWidth;
+                if (left + pickerWidth > window.innerWidth) {
+                    left = window.innerWidth - pickerWidth - 10;
+                }
+                const pickerHeight = brushSizePicker.offsetHeight;
+                if (top + pickerHeight > window.innerHeight) {
+                    top = rect.top - pickerHeight - 10;
+                }
+                brushSizePicker.style.top = top + 'px';
+                brushSizePicker.style.left = left + 'px';
+                brushSizePicker.classList.add('show');
+            }
+
+            brushBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicker(brushBtn); });
+            brushBtn.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    let timer = setTimeout(() => showPicker(brushBtn), 500);
+                    brushBtn.addEventListener('touchend', () => clearTimeout(timer), { once: true });
+                }
+            });
+            eraserBtn.addEventListener('contextmenu', (e) => { e.preventDefault(); showPicker(eraserBtn); });
+            eraserBtn.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    let timer = setTimeout(() => showPicker(eraserBtn), 500);
+                    eraserBtn.addEventListener('touchend', () => clearTimeout(timer), { once: true });
+                }
+            });
+
+            sizeSlider.addEventListener('input', () => {
+                brushSize = parseInt(sizeSlider.value);
+                sizeValue.textContent = brushSize;
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!brushSizePicker.contains(e.target) && e.target !== brushBtn && e.target !== eraserBtn) {
+                    brushSizePicker.classList.remove('show');
+                }
+            });
+
+            // ---------- Настройки ----------
+            function updateStorageInfo() {
+                let total = 0;
+                const fileMap = new Map();
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        total += localStorage[key].length * 2;
+                        if (key.startsWith('pdf_data_')) {
+                            const docId = key.substring(9);
+                            const doc = documents.find(d => d.id === docId);
+                            if (doc) {
+                                fileMap.set(doc.name, (fileMap.get(doc.name) || 0) + 1);
+                            } else {
+                                const shortId = docId.substring(0, 20) + '...';
+                                fileMap.set(shortId, (fileMap.get(shortId) || 0) + 1);
+                            }
+                        }
+                    }
+                }
+                const sizeKB = (total / 1024).toFixed(2);
+                const sizeMB = (total / (1024*1024)).toFixed(2);
+                storageSize.textContent = `Занято: ${sizeKB} KB (${sizeMB} MB)`;
+
+                fileList.innerHTML = '';
+                fileMap.forEach((count, name) => {
+                    const div = document.createElement('div');
+                    div.className = 'file-list-item';
+                    div.innerHTML = `<span>${name} (${count})</span><button data-name="${name}">Удалить</button>`;
+                    div.querySelector('button').addEventListener('click', (e) => {
+                        const fname = e.target.dataset.name;
+                        for (let key in localStorage) {
+                            if (key.startsWith('pdf_data_')) {
+                                if (key.includes(fname)) {
+                                    localStorage.removeItem(key);
+                                }
+                            }
+                        }
+                        documents.forEach(doc => {
+                            if (doc.name === fname) {
+                                doc.comments = [];
+                                doc.drawings = {};
+                            }
+                        });
+                        updateStorageInfo();
+                    });
+                    fileList.appendChild(div);
+                });
+            }
+
+            settingsBtn.addEventListener('click', () => {
+                updateStorageInfo();
+                settingsModal.style.display = 'flex';
+            });
+
+            closeModalBtn.addEventListener('click', () => {
+                settingsModal.style.display = 'none';
+            });
+
+            window.addEventListener('click', (e) => {
+                if (e.target === settingsModal) {
+                    settingsModal.style.display = 'none';
+                }
+            });
+
+            // Инициализация
+            handBtn.classList.add('active');
+            pageIndicator.style.display = 'none';
+            updateCanvasTouchAction(); // на случай, если есть canvas
+        })();
+    </script>
+</body>
+</html>
