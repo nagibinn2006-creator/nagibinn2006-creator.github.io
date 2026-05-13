@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Duo Smart Local</title>
+    <style>
+        :root {
+            --green: #58cc02; --dark-green: #46a302;
+            --blue: #1cb0f6; --red: #ff4b4b;
+            --gray: #e5e5e5; --text: #3c3c3c;
+            --bg: #ffffff;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; color: var(--text); background: var(--bg); user-select: none; overflow-x: hidden; }
+        
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; min-height: 100vh; }
+
+        /* Animations */
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .shake { animation: shake 0.4s; }
+        .pop { animation: pop 0.3s; }
+
+        /* Header */
+        .header { display: flex; align-items: center; gap: 15px; padding: 10px 0; }
+        .progress-bar { flex-grow: 1; height: 14px; background: var(--gray); border-radius: 10px; }
+        #progress-fill { width: 0%; height: 100%; background: var(--green); transition: 0.5s; border-radius: 10px; }
+
+        /* Screens */
+        .screen { display: none; flex-direction: column; height: 100%; }
+        .screen.active { display: flex; }
+
+        /* Dictionary & Stats */
+        .stats-box { background: #f7f7f7; padding: 15px; border-radius: 15px; margin-bottom: 20px; font-weight: bold; display: flex; justify-content: space-around; border: 2px solid var(--gray); }
+
+        /* Buttons */
+        .main-btn { 
+            padding: 20px; border-radius: 18px; border: none; font-weight: bold; font-size: 1.1rem; 
+            cursor: pointer; box-shadow: 0 5px 0 rgba(0,0,0,0.2); transition: 0.1s; margin-bottom: 15px;
+            color: white; text-align: center;
+        }
+        .btn-blue { background: var(--blue); box-shadow: 0 5px 0 #1899d6; }
+        .btn-green { background: var(--green); box-shadow: 0 5px 0 var(--dark-green); }
+        .btn-red { background: var(--red); box-shadow: 0 5px 0 #d13030; }
+        .main-btn:active { transform: translateY(3px); box-shadow: none; }
+
+        /* Lesson elements */
+        .workspace { flex-grow: 1; padding-bottom: 120px; }
+        .options-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        .btn-opt { padding: 16px; border: 2px solid var(--gray); border-radius: 15px; background: white; font-weight: bold; cursor: pointer; text-align: left; box-shadow: 0 4px 0 var(--gray); }
+        .btn-opt.selected { border-color: var(--blue); background: #e1f5fe; color: var(--blue); }
+        
+        .answer-area { min-height: 60px; border-bottom: 2px solid var(--gray); margin: 15px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+        .tile { padding: 10px 15px; border: 2px solid var(--gray); border-radius: 10px; background: white; font-weight: bold; cursor: pointer; box-shadow: 0 3px 0 var(--gray); }
+        .tile.used { opacity: 0.2; }
+
+        /* Matching */
+        .matching-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .match-item { padding: 15px; border: 2px solid var(--gray); border-radius: 15px; text-align: center; font-weight: bold; cursor: pointer; box-shadow: 0 4px 0 var(--gray); }
+        .match-item.active { border-color: var(--blue); background: #e1f5fe; }
+        .match-item.hidden { visibility: hidden; }
+
+        input[type="text"] { width: 100%; padding: 18px; border: 2px solid var(--gray); border-radius: 15px; font-size: 1.1rem; outline: none; }
+
+        /* Feedback Panel */
+        .footer { position: fixed; bottom: 0; width: 100%; left: 0; padding: 20px; background: white; border-top: 2px solid var(--gray); display: flex; justify-content: center; z-index: 100; }
+        #check-btn { width: 100%; max-width: 500px; padding: 18px; border-radius: 15px; background: var(--green); color: white; border: none; font-weight: bold; font-size: 1.1rem; box-shadow: 0 5px 0 var(--dark-green); }
+        #check-btn:disabled { background: var(--gray); box-shadow: none; }
+
+        .feedback { position: fixed; bottom: -150%; left: 0; width: 100%; padding: 25px; transition: 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); z-index: 101; }
+        .feedback.show { bottom: 0; }
+        .correct { background: #d7ffb8; color: #438a00; }
+        .wrong { background: #ffdfe0; color: #ea2b2b; }
+
+        #vocab-list { max-height: 300px; overflow-y: auto; background: #f9f9f9; border-radius: 15px; padding: 10px; border: 1px solid var(--gray); margin-top: 10px; }
+        .vocab-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- ГЛАВНЫЙ ЭКРАН -->
+    <div id="screen-main" class="screen active">
+        <h1 style="text-align: center; color: var(--green);">Duo Smart</h1>
+        
+        <div class="stats-box">
+            <div>📈 Слов: <span id="stat-vocab">0</span></div>
+            <div>⚠️ Ошибок: <span id="stat-mistakes">0</span></div>
+        </div>
+
+        <input type="file" id="file-input" style="display: none;" accept=".json">
+        <button class="main-btn btn-green" onclick="document.getElementById('file-input').click()">ЗАГРУЗИТЬ УРОК</button>
+        <button id="btn-review-mistakes" class="main-btn btn-red" onclick="startReviewMode()" style="display: none;">РАБОТА НАД ОШИБКАМИ</button>
+        
+        <h3>Твой словарь:</h3>
+        <div id="vocab-list"></div>
+    </div>
+
+    <!-- ЭКРАН ИГРЫ -->
+    <div id="screen-game" class="screen">
+        <div class="header">
+            <span onclick="confirmExit()" style="cursor: pointer; font-size: 24px;">✕</span>
+            <div class="progress-bar"><div id="progress-fill"></div></div>
+        </div>
+        <div class="workspace" id="main-ws">
+            <h2 id="q-title"></h2>
+            <div id="media-area"></div>
+            <div id="interaction-area"></div>
+        </div>
+        <div class="footer">
+            <button id="check-btn" disabled>ПРОВЕРИТЬ</button>
+        </div>
+    </div>
+</div>
+
+<!-- ФИДБЕК -->
+<div id="feedback-panel" class="feedback">
+    <h2 id="fb-title" style="margin:0"></h2>
+    <p id="fb-sub" style="margin: 5px 0 15px 0"></p>
+    <button id="next-btn" class="main-btn btn-green" style="width:100%; margin:0">ПРОДОЛЖИТЬ</button>
+</div>
+
+<script>
+    // --- ИНИЦИАЛИЗАЦИЯ ДАННЫХ ---
+    let db = {
+        mistakes: JSON.parse(localStorage.getItem('duo_mistakes') || '{}'),
+        vocab: JSON.parse(localStorage.getItem('duo_vocab') || '[]')
+    };
+
+    let sessionQueue = [];
+    let currentIdx = 0;
+    let currentQ = null;
+    let userAnswer = "";
+    let isReviewMode = false;
+
+    const synth = window.speechSynthesis;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // --- ЗВУКОВОЙ ДВИЖОК ---
+    function playSound(type) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'correct') {
+            osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+            osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        } else {
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+        }
+    }
+
+    function speak(text) {
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'en-US';
+        utter.rate = 0.9;
+        synth.speak(utter);
+    }
+
+    // --- СИСТЕМА ХРАНЕНИЯ ---
+    function saveDB() {
+        localStorage.setItem('duo_mistakes', JSON.stringify(db.mistakes));
+        localStorage.setItem('duo_vocab', JSON.stringify(db.vocab));
+        updateMainScreen();
+    }
+
+    function addToVocab(en, ru) {
+        if (!en || !ru) return;
+        const exists = db.vocab.find(item => item.en.toLowerCase() === en.toLowerCase());
+        if (!exists) {
+            db.vocab.push({ en, ru });
+            saveDB();
+        }
+    }
+
+    function updateMainScreen() {
+        document.getElementById('stat-vocab').innerText = db.vocab.length;
+        const mistakeKeys = Object.keys(db.mistakes);
+        document.getElementById('stat-mistakes').innerText = mistakeKeys.length;
+        document.getElementById('btn-review-mistakes').style.display = mistakeKeys.length > 0 ? 'block' : 'none';
+        
+        const list = document.getElementById('vocab-list');
+        list.innerHTML = db.vocab.slice(-20).reverse().map(i => `<div class="vocab-item"><b>${i.en}</b> <span>${i.ru}</span></div>`).join('');
+    }
+
+    // --- ЛОГИКА УРОКА ---
+    document.getElementById('file-input').onchange = (e) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const data = JSON.parse(ev.target.result);
+            sessionQueue = [...data.questions];
+            isReviewMode = false;
+            startLesson();
+        };
+        reader.readAsText(e.target.files[0]);
+    };
+
+    function startReviewMode() {
+        const keys = Object.keys(db.mistakes);
+        // Сортировка по весу (чем больше ошибок, тем выше вероятность)
+        sessionQueue = keys
+            .map(k => db.mistakes[k])
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, 10); // Берем топ 10 ошибок
+        isReviewMode = true;
+        startLesson();
+    }
+
+    function startLesson() {
+        currentIdx = 0;
+        document.getElementById('screen-main').classList.remove('active');
+        document.getElementById('screen-game').classList.add('active');
+        renderQuestion();
+    }
+
+    function renderQuestion() {
+        currentQ = sessionQueue[currentIdx];
+        const area = document.getElementById('interaction-area');
+        const media = document.getElementById('media-area');
+        document.getElementById('q-title').innerText = currentQ.question;
+        area.innerHTML = ''; media.innerHTML = '';
+        userAnswer = "";
+        document.getElementById('check-btn').disabled = true;
+
+        // Авто-озвучка английского слова, если это не задание на перевод
+        if (currentQ.speak) {
+            const b = document.createElement('button');
+            b.style.cssText = "width:60px; height:60px; border-radius:15px; border:none; background:var(--blue); color:white; font-size:24px; margin-bottom:15px; cursor:pointer;";
+            b.innerHTML = "🔊";
+            b.onclick = () => speak(currentQ.speak);
+            media.appendChild(b);
+            if(currentQ.type === 'listening') speak(currentQ.speak);
+        }
+
+        switch(currentQ.type) {
+            case 'choice':
+            case 'gap_fill':
+                const g = document.createElement('div'); g.className='options-grid';
+                currentQ.options.forEach(o => {
+                    const btn = document.createElement('button'); btn.className='btn-opt'; btn.innerText=o;
+                    btn.onclick = () => {
+                        Array.from(g.children).forEach(c => c.classList.remove('selected'));
+                        btn.classList.add('selected'); userAnswer = o;
+                        document.getElementById('check-btn').disabled = false;
+                        speak(o);
+                    };
+                    g.appendChild(btn);
+                });
+                area.appendChild(g);
+                break;
+            case 'input':
+            case 'listening':
+                const inp = document.createElement('input'); inp.type='text'; inp.placeholder='Type in English...';
+                inp.oninput = (e) => { userAnswer = e.target.value; document.getElementById('check-btn').disabled = !userAnswer.trim(); };
+                area.appendChild(inp); inp.focus();
+                break;
+            case 'translate':
+                const ansBox = document.createElement('div'); ansBox.className='answer-area';
+                const tileBox = document.createElement('div'); tileBox.className='options-grid';
+                tileBox.style.gridTemplateColumns = 'repeat(auto-fill, minmax(100px, 1fr))';
+                let selected = [];
+                currentQ.tiles.forEach((t, i) => {
+                    const div = document.createElement('div'); div.className='tile'; div.innerText = t;
+                    div.onclick = () => {
+                        if (div.classList.contains('used')) return;
+                        div.classList.add('used');
+                        const clone = div.cloneNode(true); clone.classList.remove('used');
+                        clone.onclick = () => { div.classList.remove('used'); clone.remove(); selected = selected.filter(x => x.id !== i); userAnswer = selected.map(s=>s.val).join(' '); };
+                        ansBox.appendChild(clone);
+                        selected.push({id:i, val:t});
+                        userAnswer = selected.map(s=>s.val).join(' ');
+                        document.getElementById('check-btn').disabled = false;
+                        speak(t);
+                    };
+                    tileBox.appendChild(div);
+                });
+                area.append(ansBox, tileBox);
+                break;
+            case 'matching':
+                const mWrap = document.createElement('div'); mWrap.className='matching-container';
+                const colL = document.createElement('div'); colL.style.display='flex'; colL.style.flexDirection='column'; colL.style.gap='10px';
+                const colR = colL.cloneNode();
+                let pairs = [];
+                currentQ.pairs.forEach(p => {
+                    pairs.push({t: p.en, p: p.ru, lang: 'en'});
+                    pairs.push({t: p.ru, p: p.en, lang: 'ru'});
+                    addToVocab(p.en, p.ru);
+                });
+                let matchSel = null;
+                const items = pairs.sort(()=>Math.random()-0.5);
+                items.forEach(item => {
+                    const d = document.createElement('div'); d.className='match-item'; d.innerText = item.t;
+                    d.onclick = () => {
+                        if (matchSel) {
+                            if (matchSel.t === item.p) {
+                                d.classList.add('hidden'); matchSel.el.classList.add('hidden');
+                                playSound('correct');
+                            }
+                            matchSel.el.classList.remove('active'); matchSel = null;
+                        } else {
+                            matchSel = { ...item, el: d }; d.classList.add('active');
+                            if(item.lang === 'en') speak(item.t);
+                        }
+                        if(document.querySelectorAll('.match-item:not(.hidden)').length === 0) {
+                            userAnswer = "MATCHED"; document.getElementById('check-btn').disabled = false;
+                        }
+                    };
+                    if(item.lang === 'en') colL.appendChild(d); else colR.appendChild(d);
+                });
+                mWrap.append(colL, colR); area.appendChild(mWrap);
+                break;
+        }
+    }
+
+    // --- ПРОВЕРКА ---
+    document.getElementById('check-btn').onclick = () => {
+        let isCorrect = false;
+        if(currentQ.type === 'matching') isCorrect = true;
+        else {
+            isCorrect = userAnswer.toString().toLowerCase().trim() === currentQ.answer.toLowerCase().trim();
+        }
+
+        const panel = document.getElementById('feedback-panel');
+        const ws = document.getElementById('main-ws');
+
+        if (isCorrect) {
+            playSound('correct');
+            ws.classList.add('pop');
+            panel.className = 'feedback show correct';
+            document.getElementById('fb-title').innerText = "Супер!";
+            document.getElementById('fb-sub').innerText = "";
+            
+            // Если была работа над ошибками, уменьшаем вес
+            const qId = currentQ.question;
+            if (db.mistakes[qId]) {
+                db.mistakes[qId].weight--;
+                if (db.mistakes[qId].weight <= 0) delete db.mistakes[qId];
+            }
+            // Добавляем слова в словарь
+            if(currentQ.answer && currentQ.type !== 'matching') {
+                if(currentQ.speak) addToVocab(currentQ.speak, currentQ.answer);
+            }
+        } else {
+            playSound('wrong');
+            ws.classList.add('shake');
+            panel.className = 'feedback show wrong';
+            document.getElementById('fb-title').innerText = "Ошибка";
+            document.getElementById('fb-sub').innerText = `Верно: ${currentQ.answer}`;
+            
+            // Добавляем в конец очереди текущего урока
+            sessionQueue.push(currentQ);
+            
+            // Сохраняем в глобальный банк ошибок
+            const qId = currentQ.question;
+            if (!db.mistakes[qId]) {
+                db.mistakes[qId] = { ...currentQ, weight: 1 };
+            } else {
+                db.mistakes[qId].weight += 1;
+            }
+        }
+        saveDB();
+        setTimeout(() => ws.classList.remove('shake', 'pop'), 500);
+    };
+
+    document.getElementById('next-btn').onclick = () => {
+        document.getElementById('feedback-panel').classList.remove('show');
+        currentIdx++;
+        const progress = (currentIdx / sessionQueue.length) * 100;
+        document.getElementById('progress-fill').style.width = progress + '%';
+
+        if (currentIdx < sessionQueue.length) {
+            renderQuestion();
+        } else {
+            alert("Урок завершен! Отличная работа.");
+            location.reload();
+        }
+    };
+
+    function confirmExit() { if(confirm("Выйти из урока? Прогресс не сохранится.")) location.reload(); }
+
+    updateMainScreen();
+</script>
+</body>
+</html>
