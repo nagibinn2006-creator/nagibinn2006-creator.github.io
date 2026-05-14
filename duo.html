@@ -80,7 +80,6 @@
 <body>
 
 <div class="container">
-    <!-- ГЛАВНЫЙ ЭКРАН -->
     <div id="screen-main" class="screen active">
         <h1 style="text-align: center; color: var(--green);">Duo Smart</h1>
         
@@ -90,14 +89,15 @@
         </div>
 
         <input type="file" id="file-input" style="display: none;" accept=".json">
-        <button class="main-btn btn-green" onclick="document.getElementById('file-input').click()">ЗАГРУЗИТЬ УРОК</button>
+        <button class="main-btn btn-green" onclick="document.getElementById('file-input').click()">ЗАГРУЗИТЬ JSON ФАЙЛ</button>
+        <button class="main-btn btn-blue" onclick="pasteLessonFromClipboard()">ВСТАВИТЬ УРОК ИЗ БУФЕРА</button>
+        <button id="btn-copy-prompt" class="main-btn btn-blue" onclick="copyPromptToClipboard()" style="background: #764abc; box-shadow: 0 5px 0 #5d3a94;">СКОПИРОВАТЬ ПРОМПТ ДЛЯ ИИ</button>
         <button id="btn-review-mistakes" class="main-btn btn-red" onclick="startReviewMode()" style="display: none;">РАБОТА НАД ОШИБКАМИ</button>
         
-        <h3>Твой словарь:</h3>
+        <h3>Твой словарь (только слова и фразы):</h3>
         <div id="vocab-list"></div>
     </div>
 
-    <!-- ЭКРАН ИГРЫ -->
     <div id="screen-game" class="screen">
         <div class="header">
             <span onclick="confirmExit()" style="cursor: pointer; font-size: 24px;">✕</span>
@@ -114,7 +114,6 @@
     </div>
 </div>
 
-<!-- ФИДБЕК -->
 <div id="feedback-panel" class="feedback">
     <h2 id="fb-title" style="margin:0"></h2>
     <p id="fb-sub" style="margin: 5px 0 15px 0"></p>
@@ -136,6 +135,72 @@
 
     const synth = window.speechSynthesis;
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Текст промпта для нейросети
+    const aiPromptText = `Проанализируй загруженный фрагмент учебника и создай на его основе интерактивный урок в формате JSON.
+Структура JSON: Объект должен содержать lessonTitle (строка) и массив questions.
+Типы заданий, которые нужно создать:
+
+choice: Вопрос с выбором одного варианта из 4.
+translate: Сборка предложения из плиток. В tiles добавь правильные слова + 2-3 лишних для сложности.
+matching: Пары «английское слово — русский перевод». Важно: используй только одиночные слова или устойчивые выражения (не более 3 слов).
+listening: Задание на слух. Текст для озвучки в поле speak, он же является правильным ответом.
+gap_fill: Предложение с пропуском. В options дай варианты (например, формы глаголов), в answer — правильный.
+input: Прямой перевод слова или короткой фразы с русского на английский.
+Правила формирования контента:
+
+Регистр: В полях answer всегда пиши ответ в том регистре, который логичен для предложения (начало с большой буквы, если это начало предложения), но помни, что приложение будет сравнивать их без учета регистра.
+Словарь (Vocabulary): Для всех заданий, где есть поле speak, старайся выбирать слова или фразы длиной от 1 до 3 слов. Не используй целые предложения для словаря.
+Matching: В этом типе задания используй только лексику (слова/словосочетания), которая встречалась в тексте.
+Перемешивание: Не беспокойся о порядке в matching или tiles — приложение перемешает их само, просто предоставь корректные данные.
+Пример json:
+
+{
+  "lessonTitle": "Мега-урок: 6 типов заданий",
+  "questions": [
+    {
+      "type": "choice",
+      "question": "Как по-английски будет 'Книга'?",
+      "options": ["Table", "Book", "Pen", "Apple"],
+      "answer": "Book"
+    },
+    {
+      "type": "translate",
+      "question": "Соберите предложение: 'Она пьет кофе'",
+      "tiles": ["She", "drinks", "coffee", "He", "water", "tea"],
+      "answer": "She drinks coffee",
+      "speak": "She drinks coffee"
+    },
+    {
+      "type": "matching",
+      "question": "Найдите пары слов",
+      "pairs": [
+        {"en": "Milk", "ru": "Молоко"},
+        {"en": "Bread", "ru": "Хлеб"},
+        {"en": "Cheese", "ru": "Сыр"},
+        {"en": "Sugar", "ru": "Сахар"}
+      ]
+    },
+    {
+      "type": "listening",
+      "question": "Прослушайте и напишите, что услышали",
+      "answer": "I have a cat",
+      "speak": "I have a cat"
+    },
+    {
+      "type": "gap_fill",
+      "question": "Вставьте пропущенное слово: 'He ___ a doctor'",
+      "options": ["am", "is", "are"],
+      "answer": "is",
+      "speak": "He is a doctor"
+    },
+    {
+      "type": "input",
+      "question": "Переведите слово: 'Солнце'",
+      "answer": "sun"
+    }
+  ]
+}`;
 
     // --- ЗВУКОВОЙ ДВИЖОК ---
     function playSound(type) {
@@ -176,6 +241,11 @@
 
     function addToVocab(en, ru) {
         if (!en || !ru) return;
+        
+        // ЖЕСТКИЙ ФИЛЬТР: Слово или устойчивая фраза не должны содержать больше 3 слов
+        const wordCount = en.trim().split(/\s+/).length;
+        if (wordCount > 3) return; // Если это целое предложение, игнорируем запись в словарь
+
         const exists = db.vocab.find(item => item.en.toLowerCase() === en.toLowerCase());
         if (!exists) {
             db.vocab.push({ en, ru });
@@ -193,25 +263,63 @@
         list.innerHTML = db.vocab.slice(-20).reverse().map(i => `<div class="vocab-item"><b>${i.en}</b> <span>${i.ru}</span></div>`).join('');
     }
 
+    // --- ИНТЕГРАЦИЯ БУФЕРА ОБМЕНА ---
+    function copyPromptToClipboard() {
+        navigator.clipboard.writeText(aiPromptText).then(() => {
+            const btn = document.getElementById('btn-copy-prompt');
+            const originalText = btn.innerText;
+            btn.innerText = "Скопировано! ✓";
+            btn.style.background = "#46a302";
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.style.background = "#764abc";
+            }, 1200);
+        }).catch(err => {
+            alert("Не удалось скопировать. Предоставьте разрешение браузера на чтение буфера.");
+        });
+    }
+
+    function pasteLessonFromClipboard() {
+        navigator.clipboard.readText().then(text => {
+            try {
+                const data = JSON.parse(text);
+                if (data && Array.isArray(data.questions)) {
+                    sessionQueue = [...data.questions];
+                    isReviewMode = false;
+                    startLesson();
+                } else {
+                    alert("Ошибка: В буфере обмена некорректная структура JSON. Должен быть массив 'questions'.");
+                }
+            } catch (e) {
+                alert("Ошибка: Текст в буфере обмена не является валидным JSON. Скопируйте ответ нейросети целиком.");
+            }
+        }).catch(err => {
+            alert("Не удалось прочитать буфер обмена. Убедитесь, что дали доступ к чтению в настройках браузера сайта.");
+        });
+    }
+
     // --- ЛОГИКА УРОКА ---
     document.getElementById('file-input').onchange = (e) => {
         const reader = new FileReader();
         reader.onload = (ev) => {
-            const data = JSON.parse(ev.target.result);
-            sessionQueue = [...data.questions];
-            isReviewMode = false;
-            startLesson();
+            try {
+                const data = JSON.parse(ev.target.result);
+                sessionQueue = [...data.questions];
+                isReviewMode = false;
+                startLesson();
+            } catch(e) {
+                alert("Неверный формат файла JSON.");
+            }
         };
         reader.readAsText(e.target.files[0]);
     };
 
     function startReviewMode() {
         const keys = Object.keys(db.mistakes);
-        // Сортировка по весу (чем больше ошибок, тем выше вероятность)
         sessionQueue = keys
             .map(k => db.mistakes[k])
             .sort((a, b) => b.weight - a.weight)
-            .slice(0, 10); // Берем топ 10 ошибок
+            .slice(0, 10);
         isReviewMode = true;
         startLesson();
     }
@@ -232,7 +340,6 @@
         userAnswer = "";
         document.getElementById('check-btn').disabled = true;
 
-        // Авто-озвучка английского слова, если это не задание на перевод
         if (currentQ.speak) {
             const b = document.createElement('button');
             b.style.cssText = "width:60px; height:60px; border-radius:15px; border:none; background:var(--blue); color:white; font-size:24px; margin-bottom:15px; cursor:pointer;";
@@ -340,13 +447,12 @@
             document.getElementById('fb-title').innerText = "Супер!";
             document.getElementById('fb-sub').innerText = "";
             
-            // Если была работа над ошибками, уменьшаем вес
             const qId = currentQ.question;
             if (db.mistakes[qId]) {
                 db.mistakes[qId].weight--;
                 if (db.mistakes[qId].weight <= 0) delete db.mistakes[qId];
             }
-            // Добавляем слова в словарь
+            
             if(currentQ.answer && currentQ.type !== 'matching') {
                 if(currentQ.speak) addToVocab(currentQ.speak, currentQ.answer);
             }
@@ -357,10 +463,8 @@
             document.getElementById('fb-title').innerText = "Ошибка";
             document.getElementById('fb-sub').innerText = `Верно: ${currentQ.answer}`;
             
-            // Добавляем в конец очереди текущего урока
             sessionQueue.push(currentQ);
             
-            // Сохраняем в глобальный банк ошибок
             const qId = currentQ.question;
             if (!db.mistakes[qId]) {
                 db.mistakes[qId] = { ...currentQ, weight: 1 };
